@@ -59,6 +59,22 @@ class FormatConverter(AudioProcessor):
                 default="192k",
             ),
             ParameterSpec(
+                name="sample_rate",
+                type="integer",
+                description="Output sample rate in Hz (None = preserve original)",
+                required=False,
+                default=None,
+                choices=[8000, 16000, 22050, 44100, 48000, 96000],
+            ),
+            ParameterSpec(
+                name="channels",
+                type="integer",
+                description="Number of output channels (1=mono, 2=stereo, None=preserve)",
+                required=False,
+                default=None,
+                choices=[1, 2],
+            ),
+            ParameterSpec(
                 name="normalize_audio",
                 type="boolean",
                 description="Whether to normalize audio levels",
@@ -108,6 +124,8 @@ class FormatConverter(AudioProcessor):
         output_dir: Path,
         output_format: str,
         bitrate: str = "192k",
+        sample_rate: Optional[int] = None,
+        channels: Optional[int] = None,
         normalize_audio: bool = False,
         remove_silence: bool = False,
         silence_threshold: float = -50.0,
@@ -121,6 +139,8 @@ class FormatConverter(AudioProcessor):
             output_dir: Directory for output file
             output_format: Target audio format
             bitrate: Bitrate for lossy formats
+            sample_rate: Target sample rate (None = preserve)
+            channels: Target channels (None = preserve)
             normalize_audio: Whether to normalize levels
             remove_silence: Whether to remove silence
             silence_threshold: Silence threshold in dBFS
@@ -141,6 +161,19 @@ class FormatConverter(AudioProcessor):
             # Load audio
             logger.info(f"Loading audio: {input_path}")
             audio = load_audio(input_path)
+            original_duration = len(audio)
+            original_sample_rate = audio.frame_rate
+            original_channels = audio.channels
+            
+            # Apply sample rate conversion if requested
+            if sample_rate is not None and sample_rate != audio.frame_rate:
+                logger.debug(f"Resampling from {audio.frame_rate}Hz to {sample_rate}Hz")
+                audio = audio.set_frame_rate(sample_rate)
+            
+            # Apply channel conversion if requested
+            if channels is not None and channels != audio.channels:
+                logger.debug(f"Converting from {audio.channels} to {channels} channels")
+                audio = audio.set_channels(channels)
             
             # Apply processing
             if normalize_audio:
@@ -169,9 +202,16 @@ class FormatConverter(AudioProcessor):
                 metadata={
                     "input_format": input_path.suffix.lstrip("."),
                     "output_format": output_format,
+                    "input_sample_rate": original_sample_rate,
+                    "output_sample_rate": audio.frame_rate,
+                    "input_channels": original_channels,
+                    "output_channels": audio.channels,
                     "normalized": normalize_audio,
                     "silence_removed": remove_silence,
-                    "input_duration_ms": len(audio),
+                    "input_duration_ms": original_duration,
+                    "output_duration_ms": len(audio),
+                    "processor": self.name,
+                    "version": self.version,
                 },
                 processing_time_ms=elapsed_ms,
             )

@@ -22,7 +22,18 @@ class FixedSplitter(BaseSplitter):
     Splitter that divides audio into fixed-duration segments.
     
     Pure function implementation - no side effects beyond file I/O.
+    
+    Segment Naming:
+        - Pattern: {original_name}_segment_{NNN}.{format}
+        - Example: podcast_segment_001.mp3, podcast_segment_002.mp3, ...
+    
+    Edge Cases:
+        - If file is shorter than duration: creates 1 segment
+        - If remainder < min_last_segment_ms: merges with previous segment
     """
+    
+    # Maximum segment duration: 1 hour
+    MAX_DURATION_MS = 3_600_000.0
     
     @property
     def name(self) -> str:
@@ -45,6 +56,7 @@ class FixedSplitter(BaseSplitter):
                 description="Duration of each segment in milliseconds",
                 required=True,
                 min_value=100.0,
+                max_value=self.MAX_DURATION_MS,
             ),
             ParameterSpec(
                 name="output_format",
@@ -62,6 +74,15 @@ class FixedSplitter(BaseSplitter):
                 default=1000.0,
                 min_value=0.0,
             ),
+            ParameterSpec(
+                name="crossfade_ms",
+                type="float",
+                description="Crossfade duration at segment boundaries (0 = no crossfade)",
+                required=False,
+                default=0.0,
+                min_value=0.0,
+                max_value=5000.0,
+            ),
         ]
     
     def _calculate_segments(
@@ -71,10 +92,24 @@ class FixedSplitter(BaseSplitter):
         min_last_segment_ms: float = 1000.0,
         **kwargs
     ) -> List[Tuple[float, float]]:
-        """Calculate fixed-duration segment boundaries."""
+        """Calculate fixed-duration segment boundaries.
+        
+        Args:
+            audio: Source audio segment
+            duration_ms: Target duration per segment
+            min_last_segment_ms: Minimum last segment length
+            
+        Returns:
+            List of (start_ms, end_ms) tuples
+        """
         total_duration = len(audio)
         segments = []
         start = 0.0
+        
+        # Edge case: file shorter than requested duration
+        if total_duration <= duration_ms:
+            logger.debug(f"File duration ({total_duration}ms) <= segment duration ({duration_ms}ms), returning single segment")
+            return [(0.0, float(total_duration))]
         
         while start < total_duration:
             end = min(start + duration_ms, total_duration)
@@ -83,6 +118,7 @@ class FixedSplitter(BaseSplitter):
             remaining = total_duration - end
             if 0 < remaining < min_last_segment_ms:
                 end = total_duration
+                logger.debug(f"Merging short remainder ({remaining}ms) with previous segment")
             
             segments.append((start, end))
             start = end
@@ -159,6 +195,11 @@ class FixedSplitter(BaseSplitter):
                     "segment_count": len(output_paths),
                     "duration_ms": duration_ms,
                     "total_duration_ms": len(audio),
+                    "avg_segment_ms": len(audio) / len(output_paths) if output_paths else 0,
+                    "output_format": output_format,
+                    "input_format": input_path.suffix.lstrip("."),
+                    "processor": self.name,
+                    "version": self.version,
                 },
                 processing_time_ms=elapsed_ms,
             )
