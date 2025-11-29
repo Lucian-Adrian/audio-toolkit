@@ -1,76 +1,194 @@
-"""Audio converter implementation."""
+"""Audio format converter."""
 
+import time
 from pathlib import Path
-import pydub
-from ...core.types import AudioFile, ProcessingConfig, ConversionResult
-from ...core.interfaces import AudioProcessor
-from ...core.exceptions import AudioProcessingError
-from ...utils.logger import logger
+from typing import List, Optional
+
+from pydub import AudioSegment
+from pydub.effects import normalize
+
+from ..core.exceptions import ProcessingError, ValidationError
+from ..core.interfaces import AudioProcessor
+from ..core.types import ParameterSpec, ProcessorCategory, ProcessResult
+from ..utils.audio import export_audio, load_audio
+from ..utils.file_ops import ensure_directory
+from ..utils.logger import get_logger
+from ..utils.validators import validate_format, validate_input_file
+
+logger = get_logger(__name__)
 
 
-class AudioConverter(AudioProcessor):
-    """Audio format converter using pydub."""
-
-    def process(self, audio_file: AudioFile, config: ProcessingConfig) -> ConversionResult:
-        """Convert audio file to specified format."""
+class FormatConverter(AudioProcessor):
+    """
+    Audio format converter with optional processing.
+    
+    Pure function implementation - no side effects beyond file I/O.
+    """
+    
+    @property
+    def name(self) -> str:
+        return "converter"
+    
+    @property
+    def version(self) -> str:
+        return "1.0.0"
+    
+    @property
+    def description(self) -> str:
+        return "Convert audio between formats with optional processing"
+    
+    @property
+    def category(self) -> ProcessorCategory:
+        return ProcessorCategory.MANIPULATION
+    
+    @property
+    def parameters(self) -> List[ParameterSpec]:
+        return [
+            ParameterSpec(
+                name="output_format",
+                type="string",
+                description="Target audio format",
+                required=True,
+                choices=["mp3", "wav", "flac", "ogg", "aac", "m4a"],
+            ),
+            ParameterSpec(
+                name="bitrate",
+                type="string",
+                description="Bitrate for lossy formats (e.g., '192k')",
+                required=False,
+                default="192k",
+            ),
+            ParameterSpec(
+                name="normalize_audio",
+                type="boolean",
+                description="Whether to normalize audio levels",
+                required=False,
+                default=False,
+            ),
+            ParameterSpec(
+                name="remove_silence",
+                type="boolean",
+                description="Whether to remove leading/trailing silence",
+                required=False,
+                default=False,
+            ),
+            ParameterSpec(
+                name="silence_threshold",
+                type="float",
+                description="Silence threshold in dBFS (for remove_silence)",
+                required=False,
+                default=-50.0,
+            ),
+        ]
+    
+    def _remove_silence(
+        self,
+        audio: AudioSegment,
+        threshold_dbfs: float = -50.0,
+        chunk_size: int = 10,
+    ) -> AudioSegment:
+        """Remove leading and trailing silence from audio."""
+        def detect_leading_silence(sound: AudioSegment, thresh: float) -> int:
+            trim_ms = 0
+            while sound[trim_ms:trim_ms + chunk_size].dBFS < thresh:
+                trim_ms += chunk_size
+                if trim_ms >= len(sound):
+                    return len(sound)
+            return trim_ms
+        
+        start_trim = detect_leading_silence(audio, threshold_dbfs)
+        end_trim = detect_leading_silence(audio.reverse(), threshold_dbfs)
+        
+        duration = len(audio)
+        return audio[start_trim:duration - end_trim]
+    
+    def process(
+        self,
+        input_path: Path,
+        output_dir: Path,
+        output_format: str,
+        bitrate: str = "192k",
+        normalize_audio: bool = False,
+        remove_silence: bool = False,
+        silence_threshold: float = -50.0,
+        **kwargs
+    ) -> ProcessResult:
+        """
+        Convert audio file to target format.
+        
+        Args:
+            input_path: Path to input audio file
+            output_dir: Directory for output file
+            output_format: Target audio format
+            bitrate: Bitrate for lossy formats
+            normalize_audio: Whether to normalize levels
+            remove_silence: Whether to remove silence
+            silence_threshold: Silence threshold in dBFS
+            
+        Returns:
+            ProcessResult with success status and output path
+        """
+        start_time = time.time()
+        
         try:
+            # Validate inputs
+            validate_input_file(input_path)
+            validate_format(output_format)
+            
+            # Ensure output directory exists
+            ensure_directory(output_dir)
+            
             # Load audio
-            audio = pydub.AudioSegment.from_file(str(audio_file.path))
-
-            # Apply processing options
-            if config.normalize:
-                audio = audio.normalize()
-
-            if config.remove_silence:
-                audio = self._remove_silence(audio)
-
+            logger.info(f"Loading audio: {input_path}")
+            audio = load_audio(input_path)
+            
+            # Apply processing
+            if normalize_audio:
+                logger.debug("Normalizing audio")
+                audio = normalize(audio)
+            
+            if remove_silence:
+                logger.debug(f"Removing silence (threshold: {silence_threshold}dBFS)")
+                audio = self._remove_silence(audio, silence_threshold)
+            
             # Generate output path
-            output_path = self._get_output_path(audio_file.path, config.output_format)
-
-            # Export with specified quality
-            export_params = {}
-            if config.output_format.lower() == 'mp3':
-                export_params['bitrate'] = f"{config.quality}k"
-            elif config.output_format.lower() in ['wav', 'flac']:
-                # For lossless formats, quality doesn't apply
-                pass
-
-            audio.export(str(output_path), format=config.output_format, **export_params)
-
-            # Create output AudioFile
-            output_audio = AudioFile(
-                path=output_path,
-                format=config.output_format,
-                duration=len(audio) / 1000.0,
-                sample_rate=audio.frame_rate,
-                channels=audio.channels,
-                bitrate=config.quality if config.output_format == 'mp3' else None
-            )
-
-            logger.info(f"Converted {audio_file.path} to {output_path}")
-
-            return ConversionResult(
-                input_file=audio_file,
-                output_file=output_audio,
+            output_path = output_dir / f"{input_path.stem}.{output_format}"
+            
+            # Export
+            logger.info(f"Exporting to: {output_path}")
+            export_audio(audio, output_path, format=output_format, bitrate=bitrate)
+            
+            elapsed_ms = (time.time() - start_time) * 1000
+            
+            logger.info(f"Conversion complete in {elapsed_ms:.0f}ms")
+            
+            return ProcessResult(
                 success=True,
-                processing_time=0.0  # TODO: measure time
+                input_path=input_path,
+                output_paths=[output_path],
+                metadata={
+                    "input_format": input_path.suffix.lstrip("."),
+                    "output_format": output_format,
+                    "normalized": normalize_audio,
+                    "silence_removed": remove_silence,
+                    "input_duration_ms": len(audio),
+                },
+                processing_time_ms=elapsed_ms,
             )
-
-        except Exception as e:
-            logger.error(f"Failed to convert {audio_file.path}: {e}")
-            return ConversionResult(
-                input_file=audio_file,
-                output_file=audio_file,  # dummy
+            
+        except (ValidationError, ProcessingError) as e:
+            logger.error(f"Conversion failed: {e}")
+            return ProcessResult(
                 success=False,
+                input_path=input_path,
                 error_message=str(e),
-                processing_time=0.0
+                processing_time_ms=(time.time() - start_time) * 1000,
             )
-
-    def _remove_silence(self, audio: pydub.AudioSegment, threshold: int = -50) -> pydub.AudioSegment:
-        """Remove silence from audio."""
-        return pydub.effects.strip_silence(audio, threshold=threshold)
-
-    def _get_output_path(self, input_path: Path, output_format: str) -> Path:
-        """Generate output path for converted file."""
-        stem = input_path.stem
-        return input_path.parent / f"{stem}_converted.{output_format}"
+        except Exception as e:
+            logger.exception(f"Unexpected error during conversion: {e}")
+            return ProcessResult(
+                success=False,
+                input_path=input_path,
+                error_message=f"Unexpected error: {e}",
+                processing_time_ms=(time.time() - start_time) * 1000,
+            )

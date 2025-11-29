@@ -1,58 +1,93 @@
-"""Audio processors registry and factory."""
+"""Processor registry and factory."""
 
-from typing import Dict, Type, Optional
-from ..core.interfaces import AudioProcessor, AudioSplitter
-from .converter import AudioConverter
-from .splitter.base import BaseSplitter
-from .splitter.fixed import FixedDurationSplitter
-from ..core.exceptions import ConfigurationError
-from ..utils.logger import logger
+from typing import Dict, List, Optional, Type
 
+from ..core.exceptions import PluginNotFoundError
+from ..core.interfaces import AudioProcessor
+from .converter import FormatConverter
+from .splitter import FixedSplitter
 
-class ProcessorRegistry:
-    """Registry for audio processors."""
-
-    def __init__(self):
-        self._processors: Dict[str, Type[AudioProcessor]] = {}
-        self._splitters: Dict[str, Type[AudioSplitter]] = {}
-        self._register_defaults()
-
-    def _register_defaults(self):
-        """Register default processors."""
-        self.register_processor('converter', AudioConverter)
-        self.register_splitter('base', BaseSplitter)
-        self.register_splitter('fixed', FixedDurationSplitter)
-
-    def register_processor(self, name: str, processor_class: Type[AudioProcessor]):
-        """Register an audio processor."""
-        self._processors[name] = processor_class
-        logger.debug(f"Registered processor: {name}")
-
-    def register_splitter(self, name: str, splitter_class: Type[AudioSplitter]):
-        """Register an audio splitter."""
-        self._splitters[name] = splitter_class
-        logger.debug(f"Registered splitter: {name}")
-
-    def get_processor(self, name: str) -> Type[AudioProcessor]:
-        """Get a processor class by name."""
-        if name not in self._processors:
-            raise ConfigurationError(f"Unknown processor: {name}")
-        return self._processors[name]
-
-    def get_splitter(self, name: str) -> Type[AudioSplitter]:
-        """Get a splitter class by name."""
-        if name not in self._splitters:
-            raise ConfigurationError(f"Unknown splitter: {name}")
-        return self._splitters[name]
-
-    def list_processors(self) -> list:
-        """List available processors."""
-        return list(self._processors.keys())
-
-    def list_splitters(self) -> list:
-        """List available splitters."""
-        return list(self._splitters.keys())
+# Processor registry
+_processors: Dict[str, Type[AudioProcessor]] = {}
 
 
-# Global registry instance
-registry = ProcessorRegistry()
+def register_processor(processor_class: Type[AudioProcessor]) -> Type[AudioProcessor]:
+    """
+    Register a processor class.
+    
+    Can be used as a decorator:
+        @register_processor
+        class MyProcessor(AudioProcessor):
+            ...
+    
+    Args:
+        processor_class: The processor class to register
+        
+    Returns:
+        The same class (for decorator usage)
+    """
+    instance = processor_class()
+    _processors[instance.name] = processor_class
+    return processor_class
+
+
+def get_processor(name: str) -> AudioProcessor:
+    """
+    Get a processor instance by name.
+    
+    Args:
+        name: Processor name
+        
+    Returns:
+        Processor instance
+        
+    Raises:
+        PluginNotFoundError: If processor not found
+    """
+    if name not in _processors:
+        available = ", ".join(sorted(_processors.keys()))
+        raise PluginNotFoundError(
+            f"Unknown processor: {name}. Available: {available}"
+        )
+    return _processors[name]()
+
+
+def list_processors() -> List[str]:
+    """List all registered processor names."""
+    return sorted(_processors.keys())
+
+
+def get_processor_class(name: str) -> Type[AudioProcessor]:
+    """
+    Get a processor class by name.
+    
+    Args:
+        name: Processor name
+        
+    Returns:
+        Processor class
+        
+    Raises:
+        PluginNotFoundError: If processor not found
+    """
+    if name not in _processors:
+        available = ", ".join(sorted(_processors.keys()))
+        raise PluginNotFoundError(
+            f"Unknown processor: {name}. Available: {available}"
+        )
+    return _processors[name]
+
+
+# Register default processors
+register_processor(FixedSplitter)
+register_processor(FormatConverter)
+
+
+__all__ = [
+    "register_processor",
+    "get_processor",
+    "get_processor_class",
+    "list_processors",
+    "FixedSplitter",
+    "FormatConverter",
+]
