@@ -1,88 +1,171 @@
 """Input validation utilities."""
 
 from pathlib import Path
-from typing import List
-from ..core.types import AudioFile
-from ..core.interfaces import AudioValidator
-from ..core.exceptions import ValidationError
-from .audio import validate_audio_format
-from .logger import logger
+from typing import List, Optional, Set
+
+from ..core.exceptions import (
+    EmptyFileError,
+    InvalidDurationError,
+    InvalidPathError,
+    UnsupportedFormatError,
+    ValidationError,
+)
+from .file_ops import SUPPORTED_FORMATS
 
 
-class AudioFileValidator(AudioValidator):
-    """Validator for audio files."""
+def validate_input_file(
+    path: Path,
+    formats: Optional[Set[str]] = None,
+) -> None:
+    """
+    Validate an input audio file.
+    
+    Args:
+        path: Path to validate
+        formats: Allowed formats (default: all supported)
+        
+    Raises:
+        InvalidPathError: If path doesn't exist or isn't a file
+        EmptyFileError: If file is empty
+        UnsupportedFormatError: If format isn't supported
+    """
+    if not path.exists():
+        raise InvalidPathError(f"File not found: {path}")
+    
+    if not path.is_file():
+        raise InvalidPathError(f"Path is not a file: {path}")
+    
+    if path.stat().st_size == 0:
+        raise EmptyFileError(f"File is empty: {path}")
+    
+    formats = formats or SUPPORTED_FORMATS
+    ext = path.suffix.lower().lstrip(".")
+    if ext not in formats:
+        raise UnsupportedFormatError(
+            f"Unsupported format: {ext}. Supported: {', '.join(sorted(formats))}"
+        )
 
-    def __init__(self, supported_formats: set = {'mp3', 'wav', 'flac', 'aac'}):
-        self.supported_formats = supported_formats
 
-    def validate(self, audio_file: AudioFile) -> bool:
-        """Validate an audio file."""
-        errors = self.get_validation_errors(audio_file)
-        return len(errors) == 0
+def validate_output_directory(path: Path) -> None:
+    """
+    Validate an output directory.
+    
+    Args:
+        path: Directory path
+        
+    Raises:
+        InvalidPathError: If path exists but isn't a directory
+    """
+    if path.exists() and not path.is_dir():
+        raise InvalidPathError(f"Output path is not a directory: {path}")
 
-    def get_validation_errors(self, audio_file: AudioFile) -> List[str]:
-        """Get validation errors for an audio file."""
-        errors = []
 
-        # Check if file exists
-        if not audio_file.path.exists():
-            errors.append(f"File does not exist: {audio_file.path}")
-            return errors
+def validate_duration(
+    duration_ms: float,
+    min_ms: float = 100.0,
+    max_ms: Optional[float] = None,
+) -> None:
+    """
+    Validate a duration value.
+    
+    Args:
+        duration_ms: Duration in milliseconds
+        min_ms: Minimum allowed duration
+        max_ms: Maximum allowed duration (optional)
+        
+    Raises:
+        InvalidDurationError: If duration is invalid
+    """
+    if duration_ms < min_ms:
+        raise InvalidDurationError(
+            f"Duration must be at least {min_ms}ms, got {duration_ms}ms"
+        )
+    
+    if max_ms is not None and duration_ms > max_ms:
+        raise InvalidDurationError(
+            f"Duration must be at most {max_ms}ms, got {duration_ms}ms"
+        )
 
-        # Check if it's a file
-        if not audio_file.path.is_file():
-            errors.append(f"Path is not a file: {audio_file.path}")
-            return errors
 
-        # Check format
+def validate_positive_number(
+    value: float,
+    name: str,
+    allow_zero: bool = False,
+) -> None:
+    """
+    Validate that a number is positive.
+    
+    Args:
+        value: Value to validate
+        name: Parameter name for error message
+        allow_zero: Whether zero is allowed
+        
+    Raises:
+        ValidationError: If validation fails
+    """
+    if allow_zero:
+        if value < 0:
+            raise ValidationError(f"{name} must be non-negative, got {value}")
+    else:
+        if value <= 0:
+            raise ValidationError(f"{name} must be positive, got {value}")
+
+
+def validate_format(
+    format: str,
+    formats: Optional[Set[str]] = None,
+) -> None:
+    """
+    Validate an audio format.
+    
+    Args:
+        format: Format to validate
+        formats: Allowed formats (default: all supported)
+        
+    Raises:
+        UnsupportedFormatError: If format isn't supported
+    """
+    formats = formats or SUPPORTED_FORMATS
+    if format.lower() not in formats:
+        raise UnsupportedFormatError(
+            f"Unsupported format: {format}. Supported: {', '.join(sorted(formats))}"
+        )
+
+
+def collect_validation_errors(
+    path: Optional[Path] = None,
+    duration_ms: Optional[float] = None,
+    format: Optional[str] = None,
+) -> List[str]:
+    """
+    Collect validation errors without raising exceptions.
+    
+    Args:
+        path: Optional path to validate
+        duration_ms: Optional duration to validate
+        format: Optional format to validate
+        
+    Returns:
+        List of error messages (empty if all valid)
+    """
+    errors = []
+    
+    if path is not None:
         try:
-            validate_audio_format(audio_file.path, self.supported_formats)
-        except Exception as e:
+            validate_input_file(path)
+        except (InvalidPathError, EmptyFileError, UnsupportedFormatError) as e:
             errors.append(str(e))
-
-        # Check file size (not empty)
-        if audio_file.path.stat().st_size == 0:
-            errors.append("File is empty")
-
-        # Check duration (positive)
-        if audio_file.duration <= 0:
-            errors.append("Invalid duration")
-
-        # Check sample rate
-        if audio_file.sample_rate <= 0:
-            errors.append("Invalid sample rate")
-
-        # Check channels
-        if audio_file.channels <= 0:
-            errors.append("Invalid number of channels")
-
-        return errors
-
-
-def validate_output_directory(output_dir: Path) -> None:
-    """Validate output directory."""
-    if not output_dir.exists():
+    
+    if duration_ms is not None:
         try:
-            output_dir.mkdir(parents=True, exist_ok=True)
-        except Exception as e:
-            raise ValidationError(f"Cannot create output directory: {e}")
-
-    if not output_dir.is_dir():
-        raise ValidationError(f"Output path is not a directory: {output_dir}")
-
-
-def validate_positive_number(value: float, name: str) -> None:
-    """Validate that a number is positive."""
-    if value <= 0:
-        raise ValidationError(f"{name} must be positive, got {value}")
-
-
-def validate_file_list(file_paths: List[Path]) -> List[Path]:
-    """Validate a list of file paths and return valid ones."""
-    valid_files = []
-    for path in file_paths:
-        if path.exists() and path.is_file():
-            valid_files.append(path)
-        else:
-            logger.warning(f"Invalid file path: {path}")
-    return valid_files
+            validate_duration(duration_ms)
+        except InvalidDurationError as e:
+            errors.append(str(e))
+    
+    if format is not None:
+        try:
+            validate_format(format)
+        except UnsupportedFormatError as e:
+            errors.append(str(e))
+    
+    return errors

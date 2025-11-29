@@ -1,39 +1,74 @@
-"""Logging utilities for the audio toolkit."""
+"""Logging utilities with Rich formatting."""
 
 import logging
-import sys
 from pathlib import Path
 from typing import Optional
 
+from rich.console import Console
+from rich.logging import RichHandler
 
-def setup_logger(
-    name: str = "audio_toolkit",
+# Global console for Rich output
+console = Console()
+
+# Default log format
+LOG_FORMAT = "%(message)s"
+LOG_DATE_FORMAT = "[%X]"
+
+
+def setup_logging(
     level: int = logging.INFO,
     log_file: Optional[Path] = None,
-    console: bool = True
+    rich_tracebacks: bool = True,
 ) -> logging.Logger:
-    """Set up a logger with console and optional file output."""
-    logger = logging.getLogger(name)
+    """
+    Set up logging with Rich console handler and optional file handler.
+    
+    Args:
+        level: Logging level (default INFO)
+        log_file: Optional path to log file
+        rich_tracebacks: Whether to use Rich for tracebacks
+        
+    Returns:
+        Configured logger instance
+    """
+    # Get or create the audio toolkit logger
+    logger = logging.getLogger("audio_toolkit")
     logger.setLevel(level)
-
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    
+    # Clear existing handlers
+    logger.handlers.clear()
+    
+    # Add Rich console handler
+    rich_handler = RichHandler(
+        console=console,
+        show_time=True,
+        show_path=False,
+        rich_tracebacks=rich_tracebacks,
+        tracebacks_show_locals=True,
     )
-
-    if console:
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setLevel(level)
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
-
+    rich_handler.setFormatter(logging.Formatter(LOG_FORMAT, LOG_DATE_FORMAT))
+    rich_handler.setLevel(level)
+    logger.addHandler(rich_handler)
+    
+    # Add file handler if specified
     if log_file:
+        log_file.parent.mkdir(parents=True, exist_ok=True)
         file_handler = logging.FileHandler(log_file)
+        file_handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+        )
         file_handler.setLevel(level)
-        file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-
+    
     return logger
 
 
-# Global logger instance
-logger = setup_logger()
+def get_logger(name: str = "audio_toolkit") -> logging.Logger:
+    """Get a logger instance."""
+    return logging.getLogger(name)
+
+
+# Initialize default logger
+logger = setup_logging()

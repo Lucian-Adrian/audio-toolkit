@@ -1,69 +1,103 @@
-"""Progress reporting utilities."""
+"""Progress reporting utilities using Rich."""
 
-import sys
 from typing import Optional
+
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
+
 from ..core.interfaces import ProgressReporter
-from .logger import logger
+from .logger import console
 
 
-class ConsoleProgressReporter(ProgressReporter):
-    """Console-based progress reporter."""
-
-    def __init__(self, show_percentage: bool = True):
-        self.show_percentage = show_percentage
-        self.total_steps = 0
-        self.description = ""
-
-    def start(self, total_steps: int, description: str = ""):
-        """Start progress reporting."""
-        self.total_steps = total_steps
-        self.description = description
-        if description:
-            print(f"Starting: {description}")
-        self._print_progress(0)
-
-    def update(self, current_step: int):
+class RichProgressReporter(ProgressReporter):
+    """Rich-based progress reporter with beautiful console output."""
+    
+    def __init__(self):
+        self._progress: Optional[Progress] = None
+        self._task_id: Optional[int] = None
+        self._total: int = 0
+    
+    def start(self, total: int, description: str = "") -> None:
+        """Start progress tracking."""
+        self._total = total
+        self._progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[bold blue]{task.description}"),
+            BarColumn(bar_width=40),
+            TaskProgressColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+            console=console,
+        )
+        self._progress.start()
+        self._task_id = self._progress.add_task(
+            description or "Processing",
+            total=total,
+        )
+    
+    def update(self, current: int, message: str = "") -> None:
         """Update progress."""
-        if self.total_steps > 0:
-            progress = int((current_step / self.total_steps) * 100)
-            self._print_progress(progress)
-
-    def complete(self):
-        """Mark progress as complete."""
-        self._print_progress(100)
-        print("Complete!")
-
-    def _print_progress(self, percentage: int):
-        """Print progress to console."""
-        if self.show_percentage:
-            bar = self._create_progress_bar(percentage)
-            print(f"\r{bar} {percentage}%", end="", flush=True)
-        else:
-            print(".", end="", flush=True)
-
-    def _create_progress_bar(self, percentage: int, width: int = 50) -> str:
-        """Create a progress bar string."""
-        filled = int(width * percentage / 100)
-        bar = "█" * filled + "░" * (width - filled)
-        return f"[{bar}]"
+        if self._progress and self._task_id is not None:
+            self._progress.update(
+                self._task_id,
+                completed=current,
+                description=message if message else None,
+            )
+    
+    def advance(self, amount: int = 1) -> None:
+        """Advance progress by amount."""
+        if self._progress and self._task_id is not None:
+            self._progress.advance(self._task_id, amount)
+    
+    def complete(self, message: str = "") -> None:
+        """Mark as complete."""
+        if self._progress:
+            if self._task_id is not None:
+                self._progress.update(self._task_id, completed=self._total)
+            self._progress.stop()
+            if message:
+                console.print(f"[green]✓[/green] {message}")
+    
+    def error(self, message: str) -> None:
+        """Report an error."""
+        if self._progress:
+            self._progress.stop()
+        console.print(f"[red]✗[/red] {message}")
 
 
 class SilentProgressReporter(ProgressReporter):
     """Silent progress reporter that does nothing."""
-
-    def start(self, total_steps: int, description: str = ""):
+    
+    def start(self, total: int, description: str = "") -> None:
+        pass
+    
+    def update(self, current: int, message: str = "") -> None:
+        pass
+    
+    def complete(self, message: str = "") -> None:
+        pass
+    
+    def error(self, message: str) -> None:
         pass
 
-    def update(self, current_step: int):
-        pass
 
-    def complete(self):
-        pass
-
-
-def get_progress_reporter(use_console: bool = True) -> ProgressReporter:
-    """Get a progress reporter instance."""
-    if use_console:
-        return ConsoleProgressReporter()
-    else:
+def create_progress_reporter(silent: bool = False) -> ProgressReporter:
+    """
+    Create a progress reporter.
+    
+    Args:
+        silent: If True, create a silent reporter
+        
+    Returns:
+        ProgressReporter instance
+    """
+    if silent:
         return SilentProgressReporter()
+    return RichProgressReporter()

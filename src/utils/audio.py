@@ -1,65 +1,157 @@
-"""Audio processing utilities using pydub."""
+"""Audio utilities using pydub."""
 
 from pathlib import Path
-from typing import Optional
-import pydub
+from typing import Optional, Tuple
+
+from pydub import AudioSegment
+
+from ..core.exceptions import CorruptedFileError, UnsupportedFormatError
 from ..core.types import AudioFile
-from ..core.exceptions import InvalidAudioFormatError, AudioProcessingError
-from .logger import logger
+from .file_ops import SUPPORTED_FORMATS
+from .logger import get_logger
+
+logger = get_logger(__name__)
 
 
-def load_audio_file(file_path: Path) -> AudioFile:
-    """Load an audio file and return AudioFile metadata."""
+def load_audio(path: Path) -> AudioSegment:
+    """
+    Load an audio file using pydub.
+    
+    Args:
+        path: Path to audio file
+        
+    Returns:
+        AudioSegment object
+        
+    Raises:
+        UnsupportedFormatError: If format is not supported
+        CorruptedFileError: If file cannot be loaded
+    """
+    ext = path.suffix.lower().lstrip(".")
+    
+    if ext not in SUPPORTED_FORMATS:
+        raise UnsupportedFormatError(f"Unsupported format: {ext}")
+    
     try:
-        audio = pydub.AudioSegment.from_file(str(file_path))
+        return AudioSegment.from_file(str(path))
+    except Exception as e:
+        raise CorruptedFileError(f"Failed to load {path}: {e}")
+
+
+def get_audio_info(path: Path) -> AudioFile:
+    """
+    Get audio file information.
+    
+    Args:
+        path: Path to audio file
+        
+    Returns:
+        AudioFile with metadata
+        
+    Raises:
+        CorruptedFileError: If file cannot be read
+    """
+    try:
+        audio = load_audio(path)
         return AudioFile(
-            path=file_path,
-            format=file_path.suffix[1:].lower(),
-            duration=len(audio) / 1000.0,  # pydub uses milliseconds
+            path=path,
+            format=path.suffix.lower().lstrip("."),
+            duration_ms=len(audio),
             sample_rate=audio.frame_rate,
             channels=audio.channels,
-            bitrate=getattr(audio, 'bitrate', None)
+            bitrate=getattr(audio, "bitrate", None),
         )
+    except (UnsupportedFormatError, CorruptedFileError):
+        raise
     except Exception as e:
-        logger.error(f"Failed to load audio file {file_path}: {e}")
-        raise AudioProcessingError(f"Failed to load audio file: {e}")
+        raise CorruptedFileError(f"Failed to get info for {path}: {e}")
 
 
-def validate_audio_format(file_path: Path, supported_formats: set = {'mp3', 'wav', 'flac', 'aac'}) -> bool:
-    """Validate if the audio file format is supported."""
-    format = file_path.suffix[1:].lower()
-    if format not in supported_formats:
-        raise InvalidAudioFormatError(f"Unsupported format: {format}")
-    return True
-
-
-def get_audio_duration(file_path: Path) -> float:
-    """Get the duration of an audio file in seconds."""
-    try:
-        audio = pydub.AudioSegment.from_file(str(file_path))
-        return len(audio) / 1000.0
-    except Exception as e:
-        logger.error(f"Failed to get duration for {file_path}: {e}")
-        raise AudioProcessingError(f"Failed to get duration: {e}")
-
-
-def extract_audio_segment(
-    file_path: Path,
-    start_time: float,
-    end_time: float,
-    output_path: Optional[Path] = None
+def export_audio(
+    audio: AudioSegment,
+    output_path: Path,
+    format: Optional[str] = None,
+    bitrate: Optional[str] = None,
 ) -> Path:
-    """Extract a segment from an audio file."""
-    try:
-        audio = pydub.AudioSegment.from_file(str(file_path))
-        segment = audio[start_time * 1000:end_time * 1000]
+    """
+    Export an AudioSegment to a file.
+    
+    Args:
+        audio: AudioSegment to export
+        output_path: Output file path
+        format: Output format (default: inferred from extension)
+        bitrate: Bitrate for lossy formats (e.g., "192k")
+        
+    Returns:
+        Path to exported file
+    """
+    format = format or output_path.suffix.lower().lstrip(".")
+    
+    export_params = {}
+    if bitrate and format in ("mp3", "aac", "ogg"):
+        export_params["bitrate"] = bitrate
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    audio.export(str(output_path), format=format, **export_params)
+    
+    logger.debug(f"Exported audio to {output_path}")
+    return output_path
 
-        if output_path is None:
-            output_path = file_path.parent / f"{file_path.stem}_segment{file_path.suffix}"
 
-        segment.export(str(output_path), format=output_path.suffix[1:])
-        logger.debug(f"Extracted segment from {file_path} to {output_path}")
-        return output_path
-    except Exception as e:
-        logger.error(f"Failed to extract segment from {file_path}: {e}")
-        raise AudioProcessingError(f"Failed to extract segment: {e}")
+def get_duration_ms(path: Path) -> float:
+    """Get audio duration in milliseconds."""
+    audio = load_audio(path)
+    return len(audio)
+
+
+def split_audio(
+    audio: AudioSegment,
+    start_ms: float,
+    end_ms: float,
+) -> AudioSegment:
+    """
+    Extract a segment from an AudioSegment.
+    
+    Args:
+        audio: Source AudioSegment
+        start_ms: Start time in milliseconds
+        end_ms: End time in milliseconds
+        
+    Returns:
+        Extracted segment
+    """
+    return audio[int(start_ms):int(end_ms)]
+
+
+def calculate_segments(
+    duration_ms: float,
+    segment_duration_ms: float,
+    min_last_segment_ms: float = 1000.0,
+) -> list[Tuple[float, float]]:
+    """
+    Calculate segment boundaries for fixed-duration splitting.
+    
+    Args:
+        duration_ms: Total audio duration in milliseconds
+        segment_duration_ms: Target segment duration
+        min_last_segment_ms: Minimum length for last segment
+        
+    Returns:
+        List of (start_ms, end_ms) tuples
+    """
+    segments = []
+    start = 0.0
+    
+    while start < duration_ms:
+        end = min(start + segment_duration_ms, duration_ms)
+        
+        # Handle cleanup of short last segment
+        remaining = duration_ms - end
+        if 0 < remaining < min_last_segment_ms:
+            # Extend this segment to include the remainder
+            end = duration_ms
+        
+        segments.append((start, end))
+        start = end
+    
+    return segments
