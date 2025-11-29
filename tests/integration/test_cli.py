@@ -102,7 +102,7 @@ class TestConvertCommand:
         ])
         
         assert result.exit_code == 0
-        assert "Converted" in result.output
+        assert "Files converted" in result.output or "Converting" in result.output
     
     def test_convert_files_with_normalize(self, sample_audio_5sec, output_dir):
         """Test convert files with normalize option."""

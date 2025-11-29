@@ -39,11 +39,18 @@ class TestFixedSplitterProperties:
         param_names = [p.name for p in params]
         assert "duration_ms" in param_names
         assert "output_format" in param_names
+        assert "min_last_segment_ms" in param_names
+        assert "crossfade_ms" in param_names
         
-        # Check duration_ms is required
+        # Check duration_ms has proper constraints
         duration_param = next(p for p in params if p.name == "duration_ms")
         assert duration_param.required is True
         assert duration_param.min_value == 100.0
+        assert duration_param.max_value == FixedSplitter.MAX_DURATION_MS
+    
+    def test_max_duration_constant(self):
+        """Test MAX_DURATION_MS constant is 1 hour."""
+        assert FixedSplitter.MAX_DURATION_MS == 3_600_000.0
 
 
 class TestFixedSplitterProcess:
@@ -173,8 +180,8 @@ class TestFixedSplitterProcess:
         assert result.success is True
         assert result.processing_time_ms > 0
     
-    def test_split_metadata(self, sample_audio_10sec, output_dir):
-        """Test metadata in result."""
+    def test_split_metadata_complete(self, sample_audio_10sec, output_dir):
+        """Test complete metadata in result."""
         splitter = FixedSplitter()
         
         result = splitter.process(
@@ -185,10 +192,35 @@ class TestFixedSplitterProcess:
         )
         
         assert result.success is True
+        # Required metadata
         assert "segment_count" in result.metadata
         assert "duration_ms" in result.metadata
         assert "total_duration_ms" in result.metadata
         assert result.metadata["duration_ms"] == 2000.0
+        
+        # New enhanced metadata
+        assert "avg_segment_ms" in result.metadata
+        assert "output_format" in result.metadata
+        assert "input_format" in result.metadata
+        assert "processor" in result.metadata
+        assert "version" in result.metadata
+        assert result.metadata["processor"] == "splitter-fixed"
+        assert result.metadata["output_format"] == "wav"
+    
+    def test_split_short_file_single_segment(self, sample_audio_5sec, output_dir):
+        """Test splitting file shorter than duration creates single segment."""
+        splitter = FixedSplitter()
+        
+        result = splitter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            duration_ms=10000.0,  # 10s > 5s file
+            output_format="wav",
+        )
+        
+        assert result.success is True
+        assert len(result.output_paths) == 1
+        assert result.metadata["segment_count"] == 1
 
 
 class TestFixedSplitterSegmentFilenames:
@@ -213,6 +245,44 @@ class TestFixedSplitterSegmentFilenames:
             assert path.name == expected_name
 
 
+class TestFixedSplitterMinLastSegment:
+    """Test min_last_segment_ms behavior."""
+    
+    def test_short_remainder_merged(self, sample_audio_10sec, output_dir):
+        """Test that short remainder is merged with previous segment."""
+        splitter = FixedSplitter()
+        
+        # 10s / 3s = 3 segments (3s, 3s, 3s) + 1s remainder
+        # With min_last_segment_ms=2000, the 1s gets merged with last segment
+        result = splitter.process(
+            input_path=sample_audio_10sec,
+            output_dir=output_dir,
+            duration_ms=3000.0,
+            output_format="wav",
+            min_last_segment_ms=2000.0,
+        )
+        
+        assert result.success is True
+        # Should be 3 segments: 3s, 3s, 4s (merged)
+        assert len(result.output_paths) == 3
+    
+    def test_zero_min_last_segment(self, sample_audio_10sec, output_dir):
+        """Test with min_last_segment_ms=0 (no merging)."""
+        splitter = FixedSplitter()
+        
+        result = splitter.process(
+            input_path=sample_audio_10sec,
+            output_dir=output_dir,
+            duration_ms=3000.0,
+            output_format="wav",
+            min_last_segment_ms=0.0,  # No merging
+        )
+        
+        assert result.success is True
+        # Should be 4 segments: 3s, 3s, 3s, 1s
+        assert len(result.output_paths) == 4
+
+
 class TestProcessorRegistry:
     """Test processor registry integration."""
     
@@ -222,3 +292,36 @@ class TestProcessorRegistry:
         
         assert isinstance(processor, FixedSplitter)
         assert processor.name == "splitter-fixed"
+
+
+class TestFixedSplitterPureFunction:
+    """Test that FixedSplitter is a pure function."""
+    
+    def test_no_state_between_calls(self, sample_audio_5sec, output_dir):
+        """Test that processor maintains no state between process calls."""
+        splitter = FixedSplitter()
+        
+        # First call
+        result1 = splitter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir / "run1",
+            duration_ms=1000.0,
+            output_format="wav",
+        )
+        
+        # Second call
+        result2 = splitter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir / "run2",
+            duration_ms=2000.0,
+            output_format="mp3",
+        )
+        
+        # Both should succeed independently
+        assert result1.success is True
+        assert result2.success is True
+        
+        # Results should be independent
+        assert len(result1.output_paths) != len(result2.output_paths)
+        assert result1.output_paths[0].suffix == ".wav"
+        assert result2.output_paths[0].suffix == ".mp3"

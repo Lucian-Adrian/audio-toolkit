@@ -39,6 +39,8 @@ class TestFormatConverterProperties:
         assert "output_format" in param_names
         assert "bitrate" in param_names
         assert "normalize_audio" in param_names
+        assert "sample_rate" in param_names
+        assert "channels" in param_names
 
 
 class TestFormatConverterProcess:
@@ -141,8 +143,8 @@ class TestFormatConverterProcess:
         assert result.success is True
         assert result.processing_time_ms > 0
     
-    def test_convert_metadata(self, sample_audio_5sec, output_dir):
-        """Test metadata in result."""
+    def test_convert_metadata_complete(self, sample_audio_5sec, output_dir):
+        """Test complete metadata in result."""
         converter = FormatConverter()
         
         result = converter.process(
@@ -152,9 +154,71 @@ class TestFormatConverterProcess:
         )
         
         assert result.success is True
+        # Required metadata
         assert "input_format" in result.metadata
         assert "output_format" in result.metadata
         assert result.metadata["output_format"] == "mp3"
+        
+        # New enhanced metadata
+        assert "input_sample_rate" in result.metadata
+        assert "output_sample_rate" in result.metadata
+        assert "input_channels" in result.metadata
+        assert "output_channels" in result.metadata
+        assert "input_duration_ms" in result.metadata
+        assert "output_duration_ms" in result.metadata
+        assert "processor" in result.metadata
+        assert "version" in result.metadata
+        assert result.metadata["processor"] == "converter"
+
+
+class TestFormatConverterSampleRate:
+    """Test sample rate conversion."""
+    
+    def test_convert_with_sample_rate(self, sample_audio_5sec, output_dir):
+        """Test conversion with sample rate change."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            output_format="wav",
+            sample_rate=22050,
+        )
+        
+        assert result.success is True
+        assert result.metadata["output_sample_rate"] == 22050
+    
+    def test_convert_preserve_sample_rate(self, sample_audio_5sec, output_dir):
+        """Test conversion preserves sample rate when not specified."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            output_format="wav",
+            sample_rate=None,  # Preserve
+        )
+        
+        assert result.success is True
+        assert result.metadata["input_sample_rate"] == result.metadata["output_sample_rate"]
+
+
+class TestFormatConverterChannels:
+    """Test channel conversion."""
+    
+    def test_convert_to_mono(self, sample_audio_5sec, output_dir):
+        """Test conversion to mono."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            output_format="wav",
+            channels=1,
+        )
+        
+        assert result.success is True
+        assert result.metadata["output_channels"] == 1
 
 
 class TestFormatConverterOutputFilename:
@@ -184,3 +248,35 @@ class TestConverterRegistry:
         
         assert isinstance(processor, FormatConverter)
         assert processor.name == "converter"
+
+
+class TestFormatConverterPureFunction:
+    """Test that FormatConverter is a pure function."""
+    
+    def test_no_state_between_calls(self, sample_audio_5sec, output_dir):
+        """Test that processor maintains no state between process calls."""
+        converter = FormatConverter()
+        
+        # First call with normalization
+        result1 = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir / "run1",
+            output_format="mp3",
+            normalize_audio=True,
+        )
+        
+        # Second call without normalization
+        result2 = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir / "run2",
+            output_format="flac",
+            normalize_audio=False,
+        )
+        
+        # Both should succeed independently
+        assert result1.success is True
+        assert result2.success is True
+        
+        # Results should be independent
+        assert result1.metadata["normalized"] is True
+        assert result2.metadata["normalized"] is False
