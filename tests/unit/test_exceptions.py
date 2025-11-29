@@ -1,60 +1,86 @@
-"""Unit tests for custom exceptions."""
+"""Unit tests for core exceptions."""
 
 import pytest
+
 from src.core.exceptions import (
     AudioToolkitError,
-    InvalidAudioFormatError,
-    AudioProcessingError,
-    FileNotFoundError,
-    ConfigurationError,
-    ValidationError
+    ConfigError,
+    InvalidYAMLError,
+    MissingParameterError,
+    ProcessingError,
+    CorruptedFileError,
+    UnsupportedFormatError,
+    EmptyFileError,
+    ValidationError,
+    InvalidDurationError,
+    InvalidPathError,
+    SessionError,
+    SessionLockedError,
+    SessionNotFoundError,
+    PluginError,
+    PluginNotFoundError,
+    PluginInterfaceError,
 )
 
 
-class TestExceptions:
-    """Test custom exceptions."""
-
+class TestExceptionHierarchy:
+    """Test exception inheritance hierarchy."""
+    
     def test_base_exception(self):
-        """Test base AudioToolkitError."""
+        """Test AudioToolkitError is base for all exceptions."""
         with pytest.raises(AudioToolkitError):
             raise AudioToolkitError("Test error")
+    
+    def test_config_errors_inherit_from_base(self):
+        """Test config errors inherit from AudioToolkitError."""
+        assert issubclass(ConfigError, AudioToolkitError)
+        assert issubclass(InvalidYAMLError, ConfigError)
+        assert issubclass(MissingParameterError, ConfigError)
+    
+    def test_processing_errors_inherit_from_base(self):
+        """Test processing errors inherit from AudioToolkitError."""
+        assert issubclass(ProcessingError, AudioToolkitError)
+        assert issubclass(CorruptedFileError, ProcessingError)
+        assert issubclass(UnsupportedFormatError, ProcessingError)
+        assert issubclass(EmptyFileError, ProcessingError)
+    
+    def test_validation_errors_inherit_from_base(self):
+        """Test validation errors inherit from AudioToolkitError."""
+        assert issubclass(ValidationError, AudioToolkitError)
+        assert issubclass(InvalidDurationError, ValidationError)
+        assert issubclass(InvalidPathError, ValidationError)
+    
+    def test_session_errors_inherit_from_base(self):
+        """Test session errors inherit from AudioToolkitError."""
+        assert issubclass(SessionError, AudioToolkitError)
+        assert issubclass(SessionLockedError, SessionError)
+        assert issubclass(SessionNotFoundError, SessionError)
+    
+    def test_plugin_errors_inherit_from_base(self):
+        """Test plugin errors inherit from AudioToolkitError."""
+        assert issubclass(PluginError, AudioToolkitError)
+        assert issubclass(PluginNotFoundError, PluginError)
+        assert issubclass(PluginInterfaceError, PluginError)
 
-    def test_invalid_format_error(self):
-        """Test InvalidAudioFormatError."""
-        with pytest.raises(InvalidAudioFormatError):
-            raise InvalidAudioFormatError("Invalid format")
 
+class TestExceptionMessages:
+    """Test exception message handling."""
+    
+    def test_error_message_preserved(self):
+        """Test error messages are preserved."""
+        msg = "Test error message"
+        
+        with pytest.raises(AudioToolkitError) as exc:
+            raise AudioToolkitError(msg)
+        assert str(exc.value) == msg
+    
+    def test_nested_exception_catching(self):
+        """Test catching parent exceptions catches children."""
         with pytest.raises(AudioToolkitError):
-            raise InvalidAudioFormatError("Invalid format")
-
-    def test_audio_processing_error(self):
-        """Test AudioProcessingError."""
-        with pytest.raises(AudioProcessingError):
-            raise AudioProcessingError("Processing failed")
-
-        with pytest.raises(AudioToolkitError):
-            raise AudioProcessingError("Processing failed")
-
-    def test_file_not_found_error(self):
-        """Test FileNotFoundError."""
-        with pytest.raises(FileNotFoundError):
-            raise FileNotFoundError("File not found")
-
-        with pytest.raises(AudioToolkitError):
-            raise FileNotFoundError("File not found")
-
-    def test_configuration_error(self):
-        """Test ConfigurationError."""
-        with pytest.raises(ConfigurationError):
-            raise ConfigurationError("Config error")
-
-        with pytest.raises(AudioToolkitError):
-            raise ConfigurationError("Config error")
-
-    def test_validation_error(self):
-        """Test ValidationError."""
-        with pytest.raises(ValidationError):
-            raise ValidationError("Validation failed")
-
-        with pytest.raises(AudioToolkitError):
-            raise ValidationError("Validation failed")
+            raise InvalidYAMLError("YAML parse error")
+        
+        with pytest.raises(ConfigError):
+            raise MissingParameterError("Missing 'duration'")
+        
+        with pytest.raises(ProcessingError):
+            raise CorruptedFileError("Cannot decode audio")

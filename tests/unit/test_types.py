@@ -2,130 +2,244 @@
 
 import pytest
 from pathlib import Path
-from src.core.types import AudioFile, ProcessingConfig, SplitConfig, ConversionResult, SplitResult
+from datetime import datetime
+
+from src.core.types import (
+    ProcessorCategory,
+    SessionStatus,
+    FileStatus,
+    ParameterSpec,
+    ProcessResult,
+    FileRecord,
+    Session,
+    AudioFile,
+    SplitConfig,
+)
+
+
+class TestProcessorCategory:
+    """Tests for ProcessorCategory enum."""
+    
+    def test_categories_exist(self):
+        """Test all expected categories exist."""
+        assert ProcessorCategory.MANIPULATION.value == "manipulation"
+        assert ProcessorCategory.ANALYSIS.value == "analysis"
+        assert ProcessorCategory.VOICE.value == "voice"
+        assert ProcessorCategory.AUTOMATION.value == "automation"
+
+
+class TestSessionStatus:
+    """Tests for SessionStatus enum."""
+    
+    def test_statuses_exist(self):
+        """Test all expected statuses exist."""
+        assert SessionStatus.IN_PROGRESS.value == "in_progress"
+        assert SessionStatus.COMPLETED.value == "completed"
+        assert SessionStatus.FAILED.value == "failed"
+        assert SessionStatus.PAUSED.value == "paused"
+
+
+class TestFileStatus:
+    """Tests for FileStatus enum."""
+    
+    def test_statuses_exist(self):
+        """Test all expected file statuses exist."""
+        assert FileStatus.PENDING.value == "pending"
+        assert FileStatus.PROCESSING.value == "processing"
+        assert FileStatus.COMPLETED.value == "completed"
+        assert FileStatus.FAILED.value == "failed"
+        assert FileStatus.SKIPPED.value == "skipped"
+
+
+class TestParameterSpec:
+    """Tests for ParameterSpec dataclass."""
+    
+    def test_required_fields(self):
+        """Test creating ParameterSpec with required fields."""
+        spec = ParameterSpec(
+            name="duration",
+            type="float",
+            description="Duration in milliseconds",
+        )
+        assert spec.name == "duration"
+        assert spec.type == "float"
+        assert spec.description == "Duration in milliseconds"
+        assert spec.required is False
+        assert spec.default is None
+    
+    def test_all_fields(self):
+        """Test creating ParameterSpec with all fields."""
+        spec = ParameterSpec(
+            name="duration",
+            type="float",
+            description="Duration in milliseconds",
+            required=True,
+            default=1000.0,
+            choices=None,
+            min_value=100.0,
+            max_value=60000.0,
+        )
+        assert spec.required is True
+        assert spec.default == 1000.0
+        assert spec.min_value == 100.0
+        assert spec.max_value == 60000.0
+
+
+class TestProcessResult:
+    """Tests for ProcessResult dataclass."""
+    
+    def test_success_result(self):
+        """Test creating a successful ProcessResult."""
+        result = ProcessResult(
+            success=True,
+            input_path=Path("/input/file.wav"),
+            output_paths=[Path("/output/file_001.mp3")],
+            metadata={"segment_count": 1},
+            processing_time_ms=150.5,
+        )
+        assert result.success is True
+        assert result.input_path == Path("/input/file.wav")
+        assert len(result.output_paths) == 1
+        assert result.error_message is None
+        assert result.metadata["segment_count"] == 1
+        assert result.processing_time_ms == 150.5
+    
+    def test_failed_result(self):
+        """Test creating a failed ProcessResult."""
+        result = ProcessResult(
+            success=False,
+            input_path=Path("/input/file.wav"),
+            error_message="File not found",
+        )
+        assert result.success is False
+        assert result.error_message == "File not found"
+        assert len(result.output_paths) == 0
+    
+    def test_default_values(self):
+        """Test ProcessResult default values."""
+        result = ProcessResult(
+            success=True,
+            input_path=Path("/test.wav"),
+        )
+        assert result.output_paths == []
+        assert result.error_message is None
+        assert result.metadata == {}
+        assert result.processing_time_ms == 0.0
+
+
+class TestFileRecord:
+    """Tests for FileRecord dataclass."""
+    
+    def test_default_values(self):
+        """Test FileRecord default values."""
+        record = FileRecord(file_path=Path("/test.wav"))
+        assert record.status == FileStatus.PENDING
+        assert record.error_message is None
+        assert record.output_paths == []
+        assert record.started_at is None
+        assert record.processed_at is None
+    
+    def test_completed_record(self):
+        """Test a completed FileRecord."""
+        now = datetime.now()
+        record = FileRecord(
+            file_path=Path("/test.wav"),
+            status=FileStatus.COMPLETED,
+            output_paths=[Path("/output/test_001.mp3")],
+            started_at=now,
+            processed_at=now,
+        )
+        assert record.status == FileStatus.COMPLETED
+        assert len(record.output_paths) == 1
+
+
+class TestSession:
+    """Tests for Session dataclass."""
+    
+    def test_default_values(self):
+        """Test Session default values."""
+        session = Session(
+            session_id="test-123",
+            processor_name="splitter-fixed",
+        )
+        assert session.session_id == "test-123"
+        assert session.processor_name == "splitter-fixed"
+        assert session.status == SessionStatus.IN_PROGRESS
+        assert session.total_files == 0
+        assert session.processed_count == 0
+        assert session.failed_count == 0
+        assert session.files == []
+        assert session.config == {}
+    
+    def test_full_session(self):
+        """Test Session with all fields."""
+        session = Session(
+            session_id="test-456",
+            processor_name="converter",
+            status=SessionStatus.COMPLETED,
+            total_files=10,
+            processed_count=9,
+            failed_count=1,
+            config={"output_format": "mp3"},
+        )
+        assert session.status == SessionStatus.COMPLETED
+        assert session.total_files == 10
+        assert session.processed_count == 9
+        assert session.failed_count == 1
 
 
 class TestAudioFile:
-    """Test AudioFile dataclass."""
-
+    """Tests for AudioFile dataclass."""
+    
     def test_audio_file_creation(self):
-        """Test creating an AudioFile instance."""
-        path = Path("/test/audio.mp3")
+        """Test creating an AudioFile."""
         audio = AudioFile(
-            path=path,
+            path=Path("/test/audio.mp3"),
             format="mp3",
-            duration=120.5,
+            duration_ms=120500.0,
             sample_rate=44100,
             channels=2,
-            bitrate=128
+            bitrate=192,
         )
-
-        assert audio.path == path
+        assert audio.path == Path("/test/audio.mp3")
         assert audio.format == "mp3"
-        assert audio.duration == 120.5
+        assert audio.duration_ms == 120500.0
         assert audio.sample_rate == 44100
         assert audio.channels == 2
-        assert audio.bitrate == 128
-
-
-class TestProcessingConfig:
-    """Test ProcessingConfig dataclass."""
-
-    def test_default_config(self):
-        """Test default processing config."""
-        config = ProcessingConfig()
-        assert config.output_format == "mp3"
-        assert config.quality == 128
-        assert config.normalize is False
-        assert config.remove_silence is False
-        assert config.metadata is None
-
-    def test_custom_config(self):
-        """Test custom processing config."""
-        config = ProcessingConfig(
-            output_format="wav",
-            quality=256,
-            normalize=True,
-            remove_silence=True,
-            metadata={"artist": "Test"}
+        assert audio.bitrate == 192
+    
+    def test_optional_bitrate(self):
+        """Test AudioFile with optional bitrate."""
+        audio = AudioFile(
+            path=Path("/test/audio.wav"),
+            format="wav",
+            duration_ms=60000.0,
+            sample_rate=48000,
+            channels=1,
         )
-        assert config.output_format == "wav"
-        assert config.quality == 256
-        assert config.normalize is True
-        assert config.remove_silence is True
-        assert config.metadata == {"artist": "Test"}
+        assert audio.bitrate is None
 
 
 class TestSplitConfig:
-    """Test SplitConfig dataclass."""
-
-    def test_default_split_config(self):
-        """Test default split config."""
+    """Tests for SplitConfig dataclass."""
+    
+    def test_default_values(self):
+        """Test SplitConfig default values."""
         config = SplitConfig()
         assert config.method == "fixed"
-        assert config.duration is None
-        assert config.segments is None
-        assert config.output_prefix == "segment"
-
-
-class TestConversionResult:
-    """Test ConversionResult dataclass."""
-
-    def test_success_result(self):
-        """Test successful conversion result."""
-        input_file = AudioFile(Path("/input.mp3"), "mp3", 100, 44100, 2)
-        output_file = AudioFile(Path("/output.wav"), "wav", 100, 44100, 2)
-
-        result = ConversionResult(
-            input_file=input_file,
-            output_file=output_file,
-            success=True,
-            processing_time=1.5
+        assert config.duration_ms is None
+        assert config.output_format is None
+        assert config.cleanup_last_segment is True
+    
+    def test_custom_config(self):
+        """Test SplitConfig with custom values."""
+        config = SplitConfig(
+            method="silence",
+            duration_ms=30000.0,
+            output_format="wav",
+            cleanup_last_segment=False,
         )
-
-        assert result.input_file == input_file
-        assert result.output_file == output_file
-        assert result.success is True
-        assert result.error_message is None
-        assert result.processing_time == 1.5
-
-    def test_failure_result(self):
-        """Test failed conversion result."""
-        input_file = AudioFile(Path("/input.mp3"), "mp3", 100, 44100, 2)
-
-        result = ConversionResult(
-            input_file=input_file,
-            output_file=input_file,  # dummy
-            success=False,
-            error_message="Conversion failed",
-            processing_time=0.0
-        )
-
-        assert result.success is False
-        assert result.error_message == "Conversion failed"
-
-
-class TestSplitResult:
-    """Test SplitResult dataclass."""
-
-    def test_success_split_result(self):
-        """Test successful split result."""
-        input_file = AudioFile(Path("/input.mp3"), "mp3", 100, 44100, 2)
-        output_files = [
-            AudioFile(Path("/output_001.mp3"), "mp3", 30, 44100, 2),
-            AudioFile(Path("/output_002.mp3"), "mp3", 30, 44100, 2),
-            AudioFile(Path("/output_003.mp3"), "mp3", 40, 44100, 2)
-        ]
-
-        result = SplitResult(
-            input_file=input_file,
-            output_files=output_files,
-            success=True,
-            processing_time=2.0
-        )
-
-        assert result.input_file == input_file
-        assert len(result.output_files) == 3
-        assert result.success is True
-        assert result.error_message is None
-        assert result.processing_time == 2.0
+        assert config.method == "silence"
+        assert config.duration_ms == 30000.0
+        assert config.output_format == "wav"
+        assert config.cleanup_last_segment is False
