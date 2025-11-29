@@ -1,25 +1,15 @@
-"""Main entry point for the audio toolkit."""
+"""Main entry point for the Audio Toolkit CLI."""
 
-import sys
-from pathlib import Path
+from .presentation.cli import app
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
-from presentation.cli import cli
+# Export app for use as entry point
+__all__ = ["app"]
 
 
 def main():
-    """Main function."""
-    try:
-        cli()
-    except KeyboardInterrupt:
-        print("\nInterrupted by user")
-        sys.exit(1)
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+    """Main entry point."""
+    app()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

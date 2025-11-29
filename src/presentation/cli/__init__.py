@@ -1,25 +1,29 @@
-"""Command-line interface for the audio toolkit."""
+"""CLI module using Typer."""
 
-import click
-from ...utils.config import config_manager
-from ...utils.logger import setup_logger
-from .convert_cmd import convert_cmd
-from .split_cmd import split_cmd
+import typer
 
+from .split_cmd import app as split_app
+from .convert_cmd import app as convert_app
 
-@click.group()
-@click.option('--log-level', default='INFO', help='Logging level')
-@click.option('--log-file', type=click.Path(), help='Log file path')
-def cli(log_level, log_file):
-    """Audio Toolkit CLI"""
-    # Setup logging
-    level = getattr(__import__('logging'), log_level.upper(), 20)
-    setup_logger(level=level, log_file=log_file if log_file else None)
+# Main CLI app
+app = typer.Typer(
+    name="audiotoolkit",
+    help="Audio Toolkit - Batch audio processing made easy",
+    no_args_is_help=True,
+    rich_markup_mode="rich",
+)
 
-
-cli.add_command(convert_cmd)
-cli.add_command(split_cmd)
+# Register subcommands
+app.add_typer(split_app, name="split", help="Split audio files")
+app.add_typer(convert_app, name="convert", help="Convert audio formats")
 
 
-if __name__ == '__main__':
-    cli()
+@app.command()
+def version():
+    """Show version information."""
+    from rich.console import Console
+    console = Console()
+    console.print("[bold]Audio Toolkit[/bold] v0.1.0")
+
+
+__all__ = ["app"]

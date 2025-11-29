@@ -1,65 +1,133 @@
-"""Convert command for the CLI."""
+"""Convert command for CLI."""
 
-import click
 from pathlib import Path
-from ...processors import registry
-from ...utils.audio import load_audio_file
-from ...utils.validators import AudioFileValidator, validate_output_directory
-from ...utils.progress import get_progress_reporter
-from ...core.types import ProcessingConfig
-from ...utils.logger import logger
+from typing import Optional
+
+import typer
+from rich.console import Console
+
+from ...processors import get_processor
+from ...utils.file_ops import get_audio_files, ensure_directory
+from ...utils.progress import create_progress_reporter
+from ...utils.logger import setup_logging
+
+app = typer.Typer(help="Convert audio file formats")
+console = Console()
 
 
-@click.command()
-@click.argument('input_file', type=click.Path(exists=True))
-@click.option('--output-dir', '-o', type=click.Path(), help='Output directory')
-@click.option('--format', '-f', default='mp3', help='Output format')
-@click.option('--quality', '-q', type=int, default=128, help='Quality/bitrate')
-@click.option('--normalize', is_flag=True, help='Normalize audio')
-@click.option('--remove-silence', is_flag=True, help='Remove silence')
-@click.option('--quiet', is_flag=True, help='Quiet mode')
-def convert_cmd(input_file, output_dir, format, quality, normalize, remove_silence, quiet):
-    """Convert an audio file to a different format."""
-    try:
-        input_path = Path(input_file)
-        output_dir = Path(output_dir) if output_dir else input_path.parent
-
-        # Validate inputs
-        audio_file = load_audio_file(input_path)
-        validator = AudioFileValidator()
-        if not validator.validate(audio_file):
-            errors = validator.get_validation_errors(audio_file)
-            click.echo(f"Validation errors: {errors}", err=True)
-            return
-
-        validate_output_directory(output_dir)
-
-        # Create processing config
-        config = ProcessingConfig(
-            output_format=format,
-            quality=quality,
-            normalize=normalize,
-            remove_silence=remove_silence
+@app.command("files")
+def convert_files(
+    input_path: Path = typer.Argument(
+        ...,
+        help="Input audio file or directory",
+        exists=True,
+    ),
+    output_format: str = typer.Option(
+        "mp3",
+        "--format", "-f",
+        help="Target audio format",
+    ),
+    output_dir: Optional[Path] = typer.Option(
+        None,
+        "--output", "-o",
+        help="Output directory (default: ./data/output)",
+    ),
+    bitrate: str = typer.Option(
+        "192k",
+        "--bitrate", "-b",
+        help="Bitrate for lossy formats",
+    ),
+    normalize: bool = typer.Option(
+        False,
+        "--normalize", "-n",
+        help="Normalize audio levels",
+    ),
+    remove_silence: bool = typer.Option(
+        False,
+        "--remove-silence",
+        help="Remove leading/trailing silence",
+    ),
+    recursive: bool = typer.Option(
+        False,
+        "--recursive", "-r",
+        help="Process directories recursively",
+    ),
+    quiet: bool = typer.Option(
+        False,
+        "--quiet", "-q",
+        help="Suppress progress output",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose", "-v",
+        help="Enable verbose logging",
+    ),
+):
+    """Convert audio files to a different format."""
+    import logging
+    
+    # Setup logging
+    level = logging.DEBUG if verbose else logging.INFO
+    setup_logging(level=level)
+    
+    # Default output directory
+    if output_dir is None:
+        output_dir = Path("data/output")
+    ensure_directory(output_dir)
+    
+    # Get files to process
+    if input_path.is_file():
+        files = [input_path]
+    else:
+        files = get_audio_files(input_path, recursive=recursive)
+    
+    if not files:
+        console.print("[yellow]No audio files found[/yellow]")
+        raise typer.Exit(1)
+    
+    console.print(f"[bold]Converting {len(files)} file(s) to {output_format}[/bold]")
+    
+    # Get processor
+    converter = get_processor("converter")
+    
+    # Progress reporter
+    progress = create_progress_reporter(silent=quiet)
+    progress.start(len(files), "Converting audio files")
+    
+    # Process files
+    success_count = 0
+    fail_count = 0
+    
+    for i, file_path in enumerate(files, 1):
+        result = converter.process(
+            input_path=file_path,
+            output_dir=output_dir,
+            output_format=output_format,
+            bitrate=bitrate,
+            normalize_audio=normalize,
+            remove_silence=remove_silence,
         )
-
-        # Get converter
-        converter_class = registry.get_processor('converter')
-        converter = converter_class()
-
-        # Get progress reporter
-        progress = get_progress_reporter(not quiet)
-        progress.start(1, f"Converting {input_path.name}")
-
-        # Convert the file
-        result = converter.process(audio_file, config)
-
-        progress.complete()
-
+        
         if result.success:
-            click.echo(f"Successfully converted to {result.output_file.path}")
+            success_count += 1
         else:
-            click.echo(f"Failed to convert: {result.error_message}", err=True)
+            fail_count += 1
+            if not quiet:
+                console.print(f"[red]Failed:[/red] {file_path}: {result.error_message}")
+        
+        progress.update(i)
+    
+    progress.complete()
+    
+    # Summary
+    console.print()
+    console.print(f"[green]✓[/green] Converted: {success_count} files")
+    if fail_count > 0:
+        console.print(f"[red]✗[/red] Failed: {fail_count} files")
+    console.print(f"[blue]Output:[/blue] {output_dir}")
 
-    except Exception as e:
-        logger.error(f"Convert command failed: {e}")
-        click.echo(f"Error: {e}", err=True)
+
+@app.callback()
+def callback():
+    """Convert audio files between different formats."""
+    pass
