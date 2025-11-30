@@ -10,3 +10,10 @@ pyyaml>=6.0
 
 # Python 3.13 compatibility
 audioop-lts>=0.2.1; python_version>='3.13'
+
+# Analysis & visualization (optional)
+numpy>=1.24.0
+matplotlib>=3.7.0
+
+# Transcription (optional - requires additional setup)
+# openai-whisper>=20231117
