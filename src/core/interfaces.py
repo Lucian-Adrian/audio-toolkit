@@ -120,6 +120,11 @@ class SessionStore(ABC):
         pass
 
     @abstractmethod
+    def get_latest_incomplete(self) -> Optional[Session]:
+        """Get the most recent incomplete session (IN_PROGRESS or PAUSED)."""
+        pass
+
+    @abstractmethod
     def list_sessions(
         self,
         status: Optional[str] = None,
@@ -155,8 +160,23 @@ class SessionStore(ABC):
         pass
 
     @abstractmethod
+    def pause_session(self, session_id: str) -> None:
+        """Mark a session as paused (for graceful interrupt handling)."""
+        pass
+
+    @abstractmethod
     def get_pending_files(self, session_id: str) -> List[FileRecord]:
         """Get files that haven't been processed yet."""
+        pass
+
+    @abstractmethod
+    def delete_session(self, session_id: str) -> bool:
+        """Delete a session and its file records. Returns True if deleted."""
+        pass
+
+    @abstractmethod
+    def delete_sessions_older_than(self, days: int) -> int:
+        """Purge old sessions. Returns count deleted."""
         pass
 
 
