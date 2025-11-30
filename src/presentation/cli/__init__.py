@@ -10,6 +10,7 @@ from .split_cmd import app as split_app
 from .convert_cmd import app as convert_app
 from .session_cmd import app as session_app
 from .pipeline_cmd import app as pipeline_app
+from .plugin_cmd import app as plugin_app
 from ..wizard import launch, is_interactive_terminal
 
 console = Console()
@@ -27,6 +28,7 @@ app.add_typer(split_app, name="split", help="Split audio files")
 app.add_typer(convert_app, name="convert", help="Convert audio formats")
 app.add_typer(session_app, name="sessions", help="Manage processing sessions")
 app.add_typer(pipeline_app, name="pipeline", help="Execute processing pipelines")
+app.add_typer(plugin_app, name="plugins", help="Manage audio processors and plugins")
 
 
 @app.callback(invoke_without_command=True)
