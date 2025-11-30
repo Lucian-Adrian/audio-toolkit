@@ -219,6 +219,36 @@ class TestFormatConverterChannels:
         
         assert result.success is True
         assert result.metadata["output_channels"] == 1
+    
+    def test_convert_stereo_to_mono(self, sample_audio_stereo, output_dir):
+        """Test conversion from stereo to mono."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_stereo,
+            output_dir=output_dir,
+            output_format="wav",
+            channels=1,
+        )
+        
+        assert result.success is True
+        assert result.metadata["input_channels"] == 2
+        assert result.metadata["output_channels"] == 1
+    
+    def test_convert_mono_to_stereo(self, sample_audio_5sec, output_dir):
+        """Test conversion from mono to stereo."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            output_format="wav",
+            channels=2,
+        )
+        
+        assert result.success is True
+        assert result.metadata["input_channels"] == 1
+        assert result.metadata["output_channels"] == 2
 
 
 class TestFormatConverterOutputFilename:
@@ -280,3 +310,80 @@ class TestFormatConverterPureFunction:
         # Results should be independent
         assert result1.metadata["normalized"] is True
         assert result2.metadata["normalized"] is False
+
+
+class TestFormatConverterRemoveSilence:
+    """Test silence removal functionality."""
+    
+    def test_remove_silence_basic(self, sample_audio_5sec, output_dir):
+        """Test conversion with silence removal."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            output_format="mp3",
+            remove_silence=True,
+        )
+        
+        assert result.success is True
+        assert result.metadata["silence_removed"] is True
+    
+    def test_remove_silence_custom_threshold(self, sample_audio_5sec, output_dir):
+        """Test silence removal with custom threshold."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_5sec,
+            output_dir=output_dir,
+            output_format="mp3",
+            remove_silence=True,
+            silence_threshold=-40.0,  # Custom threshold
+        )
+        
+        assert result.success is True
+        assert result.metadata["silence_removed"] is True
+    
+    def test_remove_silence_from_silent_audio(self, sample_audio_silent, output_dir):
+        """Test silence removal from completely silent audio."""
+        converter = FormatConverter()
+        
+        result = converter.process(
+            input_path=sample_audio_silent,
+            output_dir=output_dir,
+            output_format="wav",
+            remove_silence=True,
+            silence_threshold=-50.0,
+        )
+        
+        # Should still succeed, even if output is very short
+        assert result.success is True
+        assert result.metadata["silence_removed"] is True
+
+
+class TestFormatConverterExceptionHandling:
+    """Test exception handling in converter."""
+    
+    def test_unexpected_exception_handled(self, temp_dir, output_dir, monkeypatch):
+        """Test that unexpected exceptions are handled gracefully."""
+        from src.processors import converter as converter_module
+        
+        # Create a valid audio file
+        audio_file = temp_dir / "test.wav"
+        audio_file.write_bytes(b"RIFF" + b"\x00" * 100)  # Minimal WAV header
+        
+        # Monkey-patch load_audio to raise unexpected exception
+        def mock_load_audio(path):
+            raise RuntimeError("Unexpected system error")
+        
+        monkeypatch.setattr(converter_module, "load_audio", mock_load_audio)
+        
+        converter = FormatConverter()
+        result = converter.process(
+            input_path=audio_file,
+            output_dir=output_dir,
+            output_format="mp3",
+        )
+        
+        assert result.success is False
+        assert "Unexpected error" in result.error_message
