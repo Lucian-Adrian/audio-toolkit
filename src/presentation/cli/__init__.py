@@ -10,6 +10,7 @@ from .split_cmd import app as split_app
 from .convert_cmd import app as convert_app
 from .session_cmd import app as session_app
 from .pipeline_cmd import app as pipeline_app
+from ..wizard import launch, is_interactive_terminal
 
 console = Console()
 
@@ -66,8 +67,6 @@ def main(
     
     # Launch wizard if no subcommand or --wizard flag
     if ctx.invoked_subcommand is None or wizard:
-        from ..wizard import launch, is_interactive_terminal
-        
         if not is_interactive_terminal():
             console.print(
                 "[yellow]Wizard requires an interactive terminal.[/yellow]\n"
