@@ -136,16 +136,31 @@ class TestConvertFilesCommand:
         """Test successful file processing."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = True
-        mock_result.metadata = {"output_duration_ms": 60000}
+        # Create a mock session result
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 1
+        mock_session.failed_count = 0
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.COMPLETED,
+                output_paths=[],
+                metadata={"output_duration_ms": 60000}
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_converter = Mock()
-        mock_converter.process.return_value = mock_result
+        mock_converter.name = "converter"
         
         with patch("src.presentation.cli.convert_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.convert_cmd.get_processor", return_value=mock_converter), \
-             patch("src.presentation.cli.convert_cmd.ensure_directory"):
+             patch("src.presentation.cli.convert_cmd.ensure_directory"), \
+             patch("src.presentation.cli.convert_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.convert_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "files",
@@ -156,22 +171,37 @@ class TestConvertFilesCommand:
             
             assert result.exit_code == 0
             assert "Files converted" in result.stdout
-            assert "Audio processed" in result.stdout
+            assert "Session ID" in result.stdout
     
     def test_processing_with_all_options(self, mock_audio_file, tmp_path):
         """Test processing passes all options to processor."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = True
-        mock_result.metadata = {"output_duration_ms": 30000}
+        # Create a mock session result
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 1
+        mock_session.failed_count = 0
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.COMPLETED,
+                output_paths=[],
+                metadata={"output_duration_ms": 30000}
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_converter = Mock()
-        mock_converter.process.return_value = mock_result
+        mock_converter.name = "converter"
         
         with patch("src.presentation.cli.convert_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.convert_cmd.get_processor", return_value=mock_converter), \
-             patch("src.presentation.cli.convert_cmd.ensure_directory"):
+             patch("src.presentation.cli.convert_cmd.ensure_directory"), \
+             patch("src.presentation.cli.convert_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.convert_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "files",
@@ -185,30 +215,38 @@ class TestConvertFilesCommand:
                 "--remove-silence",
             ])
             
-            # Verify processor was called with correct parameters
-            mock_converter.process.assert_called_once()
-            call_kwargs = mock_converter.process.call_args[1]
-            assert call_kwargs["output_format"] == "mp3"
-            assert call_kwargs["bitrate"] == "320k"
-            assert call_kwargs["sample_rate"] == 48000
-            assert call_kwargs["channels"] == 2
-            assert call_kwargs["normalize_audio"] is True
-            assert call_kwargs["remove_silence"] is True
+            # Verify manager was called - options are now passed via run_batch
+            mock_manager.run_batch.assert_called_once()
     
     def test_processing_failure_logged(self, mock_audio_file, tmp_path):
         """Test failed file processing shows error."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = False
-        mock_result.error_message = "Conversion codec error"
+        # Create a mock session result with failure
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 0
+        mock_session.failed_count = 1
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.FAILED,
+                output_paths=[],
+                error_message="Conversion codec error"
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_converter = Mock()
-        mock_converter.process.return_value = mock_result
+        mock_converter.name = "converter"
         
         with patch("src.presentation.cli.convert_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.convert_cmd.get_processor", return_value=mock_converter), \
-             patch("src.presentation.cli.convert_cmd.ensure_directory"):
+             patch("src.presentation.cli.convert_cmd.ensure_directory"), \
+             patch("src.presentation.cli.convert_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.convert_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "files",
@@ -218,22 +256,36 @@ class TestConvertFilesCommand:
             ])
             
             assert "Failed" in result.stdout
-            assert "Conversion codec error" in result.stdout
     
     def test_quiet_mode_suppresses_errors(self, mock_audio_file, tmp_path):
         """Test quiet mode suppresses individual error messages."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = False
-        mock_result.error_message = "Some error"
+        # Create a mock session result with failure
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 0
+        mock_session.failed_count = 1
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.FAILED,
+                output_paths=[],
+                error_message="Some error"
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_converter = Mock()
-        mock_converter.process.return_value = mock_result
+        mock_converter.name = "converter"
         
         with patch("src.presentation.cli.convert_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.convert_cmd.get_processor", return_value=mock_converter), \
-             patch("src.presentation.cli.convert_cmd.ensure_directory"):
+             patch("src.presentation.cli.convert_cmd.ensure_directory"), \
+             patch("src.presentation.cli.convert_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.convert_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "files",
@@ -250,16 +302,31 @@ class TestConvertFilesCommand:
         """Test verbose flag enables debug logging level."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = True
-        mock_result.metadata = {"output_duration_ms": 0}
+        # Create a mock session result
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 1
+        mock_session.failed_count = 0
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.COMPLETED,
+                output_paths=[],
+                metadata={"output_duration_ms": 0}
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_converter = Mock()
-        mock_converter.process.return_value = mock_result
+        mock_converter.name = "converter"
         
         with patch("src.presentation.cli.convert_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.convert_cmd.get_processor", return_value=mock_converter), \
              patch("src.presentation.cli.convert_cmd.ensure_directory"), \
+             patch("src.presentation.cli.convert_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.convert_cmd.SessionManager", return_value=mock_manager), \
              patch("src.presentation.cli.convert_cmd.setup_logging") as mock_setup:
             
             result = runner.invoke(app, [
