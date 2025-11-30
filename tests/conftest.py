@@ -88,3 +88,29 @@ def invalid_audio_file(temp_dir) -> Path:
     path = temp_dir / "invalid.wav"
     path.write_text("This is not audio data")
     return path
+
+
+@pytest.fixture
+def sample_audio_stereo(temp_dir) -> Path:
+    """Create a 2-second stereo audio file."""
+    # Generate stereo by combining two sine waves
+    left = Sine(440).to_audio_segment(duration=2000)
+    right = Sine(880).to_audio_segment(duration=2000)
+    
+    # Combine as stereo
+    audio = AudioSegment.from_mono_audiosegments(left, right)
+    
+    path = temp_dir / "test_stereo.wav"
+    audio.export(str(path), format="wav")
+    return path
+
+
+@pytest.fixture
+def sample_audio_silent(temp_dir) -> Path:
+    """Create a silent audio file (all zeros)."""
+    # Generate 1 second of silence
+    audio = AudioSegment.silent(duration=1000)
+    
+    path = temp_dir / "test_silent.wav"
+    audio.export(str(path), format="wav")
+    return path
