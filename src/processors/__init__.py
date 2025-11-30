@@ -6,6 +6,12 @@ from ..core.exceptions import PluginNotFoundError
 from ..core.interfaces import AudioProcessor
 from .converter import FormatConverter
 from .splitter import FixedSplitter
+from .visualizer import AudioVisualizer
+from .statistics import AudioStatistics
+from .noise_reduce import NoiseReducer
+from .dynamics import DynamicsProcessor
+from .trimmer import AudioTrimmer
+from .transcriber import AudioTranscriber
 
 # Processor registry
 _processors: Dict[str, Type[AudioProcessor]] = {}
@@ -81,6 +87,12 @@ def get_processor_class(name: str) -> Type[AudioProcessor]:
 # Register default processors
 register_processor(FixedSplitter)
 register_processor(FormatConverter)
+register_processor(AudioVisualizer)
+register_processor(AudioStatistics)
+register_processor(NoiseReducer)
+register_processor(DynamicsProcessor)
+register_processor(AudioTrimmer)
+register_processor(AudioTranscriber)
 
 
 __all__ = [
@@ -90,4 +102,10 @@ __all__ = [
     "list_processors",
     "FixedSplitter",
     "FormatConverter",
+    "AudioVisualizer",
+    "AudioStatistics",
+    "NoiseReducer",
+    "DynamicsProcessor",
+    "AudioTrimmer",
+    "AudioTranscriber",
 ]
