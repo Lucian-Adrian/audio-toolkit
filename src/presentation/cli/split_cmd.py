@@ -12,6 +12,8 @@ from ...processors import get_processor
 from ...utils.file_ops import get_audio_files, ensure_directory
 from ...utils.progress import create_progress_reporter
 from ...utils.logger import setup_logging
+from ...orchestration import SQLiteSessionStore, SessionManager
+from ...core.types import SessionStatus
 
 app = typer.Typer(help="Split audio files into segments")
 console = Console()
@@ -63,6 +65,16 @@ def split_fixed(
         "--recursive", "-r",
         help="Process directories recursively",
     ),
+    resume: bool = typer.Option(
+        False,
+        "--resume",
+        help="Resume the most recent incomplete session",
+    ),
+    session_id: Optional[str] = typer.Option(
+        None,
+        "--session",
+        help="Specific session ID to resume",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -94,6 +106,80 @@ def split_fixed(
     duration_ms = duration * 1000
     min_last_segment_ms = min_last_segment * 1000
     
+    # Initialize session store and manager
+    store = SQLiteSessionStore()
+    progress_reporter = create_progress_reporter(silent=quiet)
+    session_manager = SessionManager(
+        store=store,
+        checkpoint_interval=100,
+        progress=progress_reporter
+    )
+    
+    # Handle resume mode
+    if resume or session_id:
+        try:
+            if session_id:
+                # Find specific session
+                sessions = store.list_sessions(limit=100)
+                matching = [s for s in sessions if s.session_id.startswith(session_id)]
+                
+                if not matching:
+                    console.print(f"[red]No session found matching: {session_id}[/red]")
+                    raise typer.Exit(1)
+                
+                if len(matching) > 1:
+                    console.print(f"[yellow]Multiple sessions match '{session_id}':[/yellow]")
+                    for s in matching:
+                        console.print(f"  - {s.session_id[:8]}...")
+                    raise typer.Exit(1)
+                
+                resumable_session = matching[0]
+            else:
+                resumable_session = session_manager.get_resumable_session()
+            
+            if resumable_session is None:
+                console.print("[yellow]No incomplete session found to resume[/yellow]")
+                raise typer.Exit(1)
+            
+            if resumable_session.status == SessionStatus.COMPLETED:
+                console.print("[yellow]Session is already completed. Starting new session.[/yellow]")
+                resume = False
+                session_id = None
+            else:
+                # Show resume info
+                pending = resumable_session.total_files - resumable_session.processed_count
+                console.print(Panel(
+                    f"[bold]Resuming session[/bold] {resumable_session.session_id[:8]}...\n"
+                    f"Files remaining: {pending} of {resumable_session.total_files}",
+                    title="🔄 Resume",
+                    border_style="cyan",
+                ))
+                
+                # Get processor and run
+                splitter = get_processor("splitter-fixed")
+                ensure_directory(output_dir)
+                
+                session = session_manager.run_batch(
+                    processor=splitter,
+                    input_files=[],  # Not used in resume
+                    output_dir=output_dir,
+                    config={
+                        "duration_ms": duration_ms,
+                        "output_format": output_format,
+                        "min_last_segment_ms": min_last_segment_ms,
+                    },
+                    resume_session_id=resumable_session.session_id,
+                )
+                
+                _print_session_summary(session)
+                store.close()
+                return
+                
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            store.close()
+            raise typer.Exit(1)
+    
     # Get files to process
     if input_path.is_file():
         files = [input_path]
@@ -102,6 +188,7 @@ def split_fixed(
     
     if not files:
         console.print("[yellow]No audio files found[/yellow]")
+        store.close()
         raise typer.Exit(1)
     
     # Dry run mode - show what would be processed
@@ -127,6 +214,7 @@ def split_fixed(
         console.print(f"\n[dim]Output directory: {output_dir}[/dim]")
         console.print(f"[dim]Segment duration: {_format_duration(duration_ms)}[/dim]")
         console.print(f"[dim]Output format: {output_format}[/dim]")
+        store.close()
         return
     
     ensure_directory(output_dir)
@@ -136,50 +224,49 @@ def split_fixed(
     # Get processor
     splitter = get_processor("splitter-fixed")
     
-    # Progress reporter
-    progress = create_progress_reporter(silent=quiet)
-    progress.start(len(files), "Splitting audio files")
+    # Run batch with session tracking
+    config = {
+        "duration_ms": duration_ms,
+        "output_format": output_format,
+        "min_last_segment_ms": min_last_segment_ms,
+    }
     
-    # Process files
-    success_count = 0
-    fail_count = 0
-    total_segments = 0
-    total_duration_ms = 0
-    
-    for i, file_path in enumerate(files, 1):
-        result = splitter.process(
-            input_path=file_path,
+    try:
+        session = session_manager.run_batch(
+            processor=splitter,
+            input_files=files,
             output_dir=output_dir,
-            duration_ms=duration_ms,
-            output_format=output_format,
-            min_last_segment_ms=min_last_segment_ms,
+            config=config,
         )
         
-        if result.success:
-            success_count += 1
-            total_segments += len(result.output_paths)
-            total_duration_ms += result.metadata.get("total_duration_ms", 0)
-        else:
-            fail_count += 1
-            if not quiet:
-                console.print(f"[red]Failed:[/red] {file_path}: {result.error_message}")
+        _print_session_summary(session)
         
-        progress.update(i)
-    
-    progress.complete()
-    
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Interrupted! Session saved. Use 'audiotoolkit sessions resume' to continue.[/yellow]")
+        raise typer.Exit(130)
+    finally:
+        store.close()
+
+
+def _print_session_summary(session):
+    """Print session summary table."""
     # Summary table
     console.print()
     table = Table(title="Summary", show_header=False, box=None)
     table.add_column("Metric", style="bold")
     table.add_column("Value", justify="right")
     
-    table.add_row("✓ Files processed", f"[green]{success_count}[/green]")
+    # Count total segments from completed files
+    total_segments = sum(
+        len(f.output_paths) for f in session.files 
+        if f.status.value == "completed"
+    )
+    
+    table.add_row("✓ Files processed", f"[green]{session.processed_count}[/green]")
     table.add_row("✓ Segments created", f"[green]{total_segments}[/green]")
-    table.add_row("  Audio processed", _format_duration(total_duration_ms))
-    if fail_count > 0:
-        table.add_row("✗ Failed", f"[red]{fail_count}[/red]")
-    table.add_row("  Output directory", str(output_dir))
+    if session.failed_count > 0:
+        table.add_row("✗ Failed", f"[red]{session.failed_count}[/red]")
+    table.add_row("  Session ID", session.session_id[:8] + "...")
     
     console.print(table)
 
