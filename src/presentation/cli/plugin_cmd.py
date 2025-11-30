@@ -190,15 +190,15 @@ def disable_plugin(
     if not PluginManager.is_initialized():
         PluginManager.discover()
     
-    # Check if plugin exists
-    if name not in PluginManager.list_names():
-        console.print(f"[red]Error:[/red] Unknown processor: {name}")
-        raise typer.Exit(1)
-    
     # Check if already disabled
     if PluginManager.is_disabled(name):
         console.print(f"[yellow]Processor '{name}' is already disabled.[/yellow]")
         raise typer.Exit(0)
+    
+    # Check if plugin exists
+    if name not in PluginManager.list_names():
+        console.print(f"[red]Error:[/red] Unknown processor: {name}")
+        raise typer.Exit(1)
     
     PluginManager.disable(name)
     console.print(f"[green]✓[/green] Disabled processor: [bold]{name}[/bold]")
