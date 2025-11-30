@@ -15,137 +15,245 @@ audio-toolkit/
 ├── pyproject.toml          # Python project configuration
 ├── requirements.txt        # Python dependencies
 ├── requirements-dev.txt    # Development dependencies
-├── README.md               # Project README
-├── CHANGELOG.md            # Change log
-├── CONTRIBUTING.md         # Contributing guidelines
-├── LICENSE                 # License file
-└── .github/                # GitHub configuration
+├── readme.md               # Project README
+├── changelog.md            # Change log
+├── contributing.md         # Contributing guidelines
+└── LICENSE                 # License file
 ```
 
 ## Source Code (src/)
 
+### Main Entry Point (src/main.py)
+Main application entry point that initializes and runs the CLI with wizard support.
+
 ### Core Module (src/core/)
 Fundamental types, exceptions, and interfaces.
 
-- `__init__.py` - Package initialization
-- `types.py` - Data classes for audio metadata and configuration
-- `exceptions.py` - Custom exception classes
-- `interfaces.py` - Abstract base classes for components
+```
+src/core/
+├── __init__.py             # Package exports
+├── types.py                # Data classes (AudioMetadata, ProcessorCategory, etc.)
+├── exceptions.py           # Custom exceptions (AudioProcessingError, etc.)
+└── interfaces.py           # Abstract base classes (AudioProcessor, etc.)
+```
 
 ### Utils Module (src/utils/)
 Utility functions and helpers.
 
-- `__init__.py` - Package initialization
-- `logger.py` - Logging configuration
-- `file_ops.py` - File system operations
-- `audio.py` - Audio file utilities (using pydub)
-- `config.py` - Configuration management
-- `progress.py` - Progress reporting utilities
-- `validators.py` - Input validation functions
+```
+src/utils/
+├── __init__.py             # Package exports
+├── audio.py                # Audio file utilities (pydub wrappers)
+├── config.py               # Configuration management
+├── file_ops.py             # File system operations
+├── logger.py               # Logging configuration
+├── progress.py             # Progress reporting utilities
+└── validators.py           # Input validation functions
+```
 
 ### Processors Module (src/processors/)
-Audio processing components.
+Audio processing components implementing the AudioProcessor interface.
 
-- `__init__.py` - Processor registry and factory
-- `converter.py` - Audio format converter
-- `splitter/` - Audio splitting components
-  - `__init__.py` - (empty)
-  - `base.py` - Base splitter class
-  - `fixed.py` - Fixed duration splitter
+```
+src/processors/
+├── __init__.py             # Processor registry and factory
+├── converter.py            # Audio format converter
+├── visualizer.py           # Audio visualization (waveform, spectrogram)
+├── statistics.py           # Audio statistics analyzer (RMS, peak, VAD)
+├── noise_reduce.py         # Noise reduction via spectral subtraction
+├── dynamics.py             # Dynamics processing (compression, EQ)
+├── trimmer.py              # Automatic silence trimming
+├── transcriber.py          # Whisper-based transcription
+└── splitter/               # Audio splitting components
+    ├── __init__.py         # Splitter exports
+    ├── base.py             # Base splitter class
+    └── fixed.py            # Fixed duration splitter
+```
+
+### Orchestration Module (src/orchestration/)
+Session management, pipeline engine, and plugin system.
+
+```
+src/orchestration/
+├── __init__.py             # Package exports
+├── pipeline.py             # Pipeline engine for multi-step workflows
+├── pipeline_config.py      # YAML pipeline configuration parsing
+├── plugin_manager.py       # Plugin discovery and management
+├── session.py              # Session state management
+└── session_store.py        # Persistent session storage
+```
 
 ### Presentation Module (src/presentation/)
-User interface components.
+User interface components including CLI and interactive wizard.
 
-- `__init__.py` - (empty)
-- `cli/` - Command-line interface
-  - `__init__.py` - CLI setup and commands
-  - `convert_cmd.py` - Convert command implementation
-  - `split_cmd.py` - Split command implementation
-
-### Main Entry Point (src/main.py)
-Main application entry point that initializes and runs the CLI.
+```
+src/presentation/
+├── __init__.py             # Package exports
+├── cli/                    # Command-line interface
+│   ├── __init__.py         # CLI app setup with Typer
+│   ├── analyze_cmd.py      # Analyze command (visualize, stats, transcribe)
+│   ├── convert_cmd.py      # Convert command implementation
+│   ├── pipeline_cmd.py     # Pipeline command implementation
+│   ├── plugin_cmd.py       # Plugin management commands
+│   ├── session_cmd.py      # Session management commands
+│   ├── split_cmd.py        # Split command implementation
+│   └── voice_cmd.py        # Voice enhancement commands
+└── wizard/                 # Interactive wizard
+    ├── __init__.py         # Wizard exports
+    ├── components.py       # Reusable UI components
+    ├── convert_wizard.py   # Convert operation wizard
+    ├── main_menu.py        # Main menu and wizard entry
+    ├── preset_manager.py   # Preset save/load functionality
+    └── split_wizard.py     # Split operation wizard
+```
 
 ## Tests (tests/)
+
+### Configuration (tests/conftest.py)
+Pytest fixtures and test configuration shared across all tests.
 
 ### Unit Tests (tests/unit/)
 Tests for individual components.
 
-- `test_types.py` - Test core data types
-- `test_exceptions.py` - Test custom exceptions
-- `test_interfaces.py` - Test abstract interfaces
+```
+tests/unit/
+├── __init__.py
+├── test_audio.py           # Audio utility tests
+├── test_cli_convert.py     # Convert CLI tests
+├── test_cli_pipeline.py    # Pipeline CLI tests
+├── test_cli_plugin.py      # Plugin CLI tests
+├── test_cli_session.py     # Session CLI tests
+├── test_cli_split.py       # Split CLI tests
+├── test_config.py          # Configuration tests
+├── test_converter.py       # Converter processor tests
+├── test_exceptions.py      # Custom exception tests
+├── test_file_ops.py        # File operations tests
+├── test_interfaces.py      # Interface tests
+├── test_logger.py          # Logger tests
+├── test_phase7_cli.py      # Analyze/Voice CLI tests
+├── test_phase7_processors.py # Advanced processor tests
+├── test_pipeline_config.py # Pipeline config tests
+├── test_pipeline_engine.py # Pipeline engine tests
+├── test_plugin_manager.py  # Plugin manager tests
+├── test_processor_registry.py # Processor registry tests
+├── test_progress.py        # Progress utility tests
+├── test_session_manager.py # Session manager tests
+├── test_session_store.py   # Session store tests
+├── test_splitter_fixed.py  # Fixed splitter tests
+├── test_types.py           # Core types tests
+├── test_utils.py           # Utility tests
+├── test_validators.py      # Validator tests
+└── test_wizard.py          # Wizard tests
+```
 
 ### Integration Tests (tests/integration/)
-Tests for component interactions.
+Tests for component interactions and end-to-end workflows.
 
-- `test_audio_processing.py` - Test audio processing workflows
+```
+tests/integration/
+├── __init__.py
+├── test_cli.py             # End-to-end CLI tests
+├── test_crash_recovery.py  # Session recovery tests
+└── test_pipeline.py        # Pipeline execution tests
+```
 
-### Fixtures (tests/fixtures/)
-Test data and fixtures.
+### Test Fixtures (tests/fixtures/)
+Test data and sample files.
+
+```
+tests/fixtures/
+├── sample_plugin/          # Example plugin for testing
+│   ├── pyproject.toml      # Plugin package config
+│   ├── README.md           # Plugin documentation
+│   └── echo_processor.py   # Sample processor implementation
+└── audio/                  # Sample audio files (if present)
+```
 
 ## Documentation (docs/)
 
-### Specifications (docs/specs/)
-Detailed specifications for modules.
-
-- `core_spec.md` - Core module specifications
-- `utils_spec.md` - Utils module specifications
-- `processors_spec.md` - Processors module specifications
-- `cli_spec.md` - CLI specifications
-
-### Info (docs/info/)
-Project information.
-
-- `description.md` - Project description and features
-
-### Other Documentation
-- `backend/` - Backend development docs
-- `db/` - Database documentation
-- `frontend/` - Frontend development docs
-- `tests/` - Testing documentation
+```
+docs/
+├── file-structure.md       # This file
+├── backend/                # Backend development docs
+├── db/                     # Database documentation
+├── frontend/               # Frontend development docs
+├── info/                   # Project information
+│   └── description.md      # Project description
+├── plugins/                # Plugin development docs
+│   └── creating-plugins.md # Plugin creation guide
+├── specs/                  # Module specifications
+│   ├── 00_overview.md      # Project overview
+│   ├── 01_core_interfaces.md  # Core interfaces spec
+│   ├── 02_design.md        # Design document
+│   ├── 03_plan.md          # Development plan
+│   ├── core_spec.md        # Core module spec
+│   ├── utils_spec.md       # Utils module spec
+│   ├── processors_spec.md  # Processors spec
+│   └── cli_spec.md         # CLI spec
+└── tests/                  # Testing documentation
+```
 
 ## Configuration (config/)
 
-### Docker Configuration
-- `docker-compose.yml` - Docker Compose setup
-- `Dockerfile` - Docker image definition
+```
+config/
+├── docker-compose.yml      # Docker Compose multi-container setup
+└── Dockerfile              # Docker image definition
+```
 
 ## Data (data/)
 
-### Logs (data/logs/)
-Application logs.
+Runtime data directories (created as needed):
 
-### Output (data/output/)
-Processed audio output files.
+```
+data/
+├── logs/                   # Application logs
+├── output/                 # Processed audio output
+├── presets/                # Saved user presets (JSON)
+└── sessions/               # Session state files (JSON)
+```
 
-### Presets (data/presets/)
-Audio processing presets.
+## Key Files
 
-### Sessions (data/sessions/)
-Session data and state.
+### pyproject.toml
+Modern Python project configuration including:
+- Package metadata and dependencies
+- Entry points for CLI (`audiotoolkit`) and plugins
+- Tool configurations (pytest, mypy, ruff)
 
-## GitHub (.github/)
+### requirements.txt
+Production dependencies:
+- `pydub` - Audio manipulation
+- `typer[all]` - CLI framework
+- `rich` - Terminal formatting
+- `pydantic` - Data validation
+- `InquirerPy` - Interactive prompts
+- `PyYAML` - YAML parsing
 
-### Workflows (.github/workflows/)
-CI/CD pipeline definitions.
+### requirements-dev.txt
+Development dependencies:
+- `pytest` - Testing framework
+- `pytest-cov` - Coverage reporting
+- `mypy` - Type checking
+- `ruff` - Linting
+- `black` - Code formatting
 
-### Copilot Instructions (.github/copilot-instructions.md)
-Instructions for GitHub Copilot usage.
+## Entry Points
 
-## Configuration Files
+The project defines these entry points in `pyproject.toml`:
 
-### Python Project (pyproject.toml)
-Modern Python project configuration with build system, dependencies, and tool settings.
+### Console Scripts
+- `audiotoolkit` → `src.main:main` - Main CLI entry point
 
-### Requirements (requirements.txt)
-Production Python dependencies.
+### Plugin System
+- `audiotoolkit.plugins` - Entry point group for third-party processors
+  - `splitter-fixed` → `src.processors.splitter.fixed:FixedSplitter`
+  - `converter` → `src.processors.converter:FormatConverter`
+  - `visualizer` → `src.processors.visualizer:AudioVisualizer`
+  - `statistics` → `src.processors.statistics:AudioStatistics`
+  - `noise_reduce` → `src.processors.noise_reduce:NoiseReducer`
+  - `dynamics` → `src.processors.dynamics:DynamicsProcessor`
+  - `trimmer` → `src.processors.trimmer:AudioTrimmer`
+  - `transcriber` → `src.processors.transcriber:AudioTranscriber`
 
-### Development Requirements (requirements-dev.txt)
-Development and testing dependencies.
-
-### Docker Compose (config/docker-compose.yml)
-Multi-container Docker application setup.
-
-### Deployment Scripts (config/)
-- `deploy.ps1` - PowerShell deployment script
-- `deploy.sh` - Bash deployment script
 
