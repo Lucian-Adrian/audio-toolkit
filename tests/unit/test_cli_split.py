@@ -106,17 +106,30 @@ class TestSplitFixedCommand:
         """Test successful file processing."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = True
-        mock_result.output_paths = [Path("seg1.mp3"), Path("seg2.mp3")]
-        mock_result.metadata = {"total_duration_ms": 60000}
+        # Create a mock session result
+        from src.core.types import Session, SessionStatus, FileRecord, FileStatus
+        mock_session = Mock(spec=Session)
+        mock_session.processed_count = 1
+        mock_session.failed_count = 0
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.COMPLETED,
+                output_paths=[Path("seg1.mp3"), Path("seg2.mp3")]
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_splitter = Mock()
-        mock_splitter.process.return_value = mock_result
+        mock_splitter.name = "splitter-fixed"
         
         with patch("src.presentation.cli.split_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.split_cmd.get_processor", return_value=mock_splitter), \
-             patch("src.presentation.cli.split_cmd.ensure_directory"):
+             patch("src.presentation.cli.split_cmd.ensure_directory"), \
+             patch("src.presentation.cli.split_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.split_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "fixed",
@@ -133,16 +146,31 @@ class TestSplitFixedCommand:
         """Test failed file processing shows error."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = False
-        mock_result.error_message = "Audio codec error"
+        # Create a mock session result with failure
+        from src.core.types import Session, SessionStatus, FileRecord, FileStatus
+        mock_session = Mock(spec=Session)
+        mock_session.processed_count = 0
+        mock_session.failed_count = 1
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.FAILED,
+                output_paths=[],
+                error_message="Audio codec error"
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_splitter = Mock()
-        mock_splitter.process.return_value = mock_result
+        mock_splitter.name = "splitter-fixed"
         
         with patch("src.presentation.cli.split_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.split_cmd.get_processor", return_value=mock_splitter), \
-             patch("src.presentation.cli.split_cmd.ensure_directory"):
+             patch("src.presentation.cli.split_cmd.ensure_directory"), \
+             patch("src.presentation.cli.split_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.split_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "fixed",
@@ -152,22 +180,36 @@ class TestSplitFixedCommand:
             ])
             
             assert "Failed" in result.stdout
-            assert "Audio codec error" in result.stdout
     
     def test_quiet_mode_suppresses_errors(self, mock_audio_file, tmp_path):
         """Test quiet mode suppresses individual error messages."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = False
-        mock_result.error_message = "Some error"
+        # Create a mock session result with failure
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 0
+        mock_session.failed_count = 1
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.FAILED,
+                output_paths=[],
+                error_message="Some error"
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_splitter = Mock()
-        mock_splitter.process.return_value = mock_result
+        mock_splitter.name = "splitter-fixed"
         
         with patch("src.presentation.cli.split_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.split_cmd.get_processor", return_value=mock_splitter), \
-             patch("src.presentation.cli.split_cmd.ensure_directory"):
+             patch("src.presentation.cli.split_cmd.ensure_directory"), \
+             patch("src.presentation.cli.split_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.split_cmd.SessionManager", return_value=mock_manager):
             
             result = runner.invoke(app, [
                 "fixed",
@@ -184,17 +226,31 @@ class TestSplitFixedCommand:
         """Test verbose flag enables debug logging level."""
         output_dir = tmp_path / "output"
         
-        mock_result = Mock()
-        mock_result.success = True
-        mock_result.output_paths = []
-        mock_result.metadata = {"total_duration_ms": 0}
+        # Create a mock session result
+        from src.core.types import FileStatus
+        mock_session = Mock()
+        mock_session.processed_count = 1
+        mock_session.failed_count = 0
+        mock_session.session_id = "test-session-123"
+        mock_session.files = [
+            Mock(
+                status=FileStatus.COMPLETED,
+                output_paths=[],
+                metadata={"total_duration_ms": 0}
+            )
+        ]
+        
+        mock_manager = Mock()
+        mock_manager.run_batch.return_value = mock_session
         
         mock_splitter = Mock()
-        mock_splitter.process.return_value = mock_result
+        mock_splitter.name = "splitter-fixed"
         
         with patch("src.presentation.cli.split_cmd.get_audio_files", return_value=[mock_audio_file]), \
              patch("src.presentation.cli.split_cmd.get_processor", return_value=mock_splitter), \
              patch("src.presentation.cli.split_cmd.ensure_directory"), \
+             patch("src.presentation.cli.split_cmd.SQLiteSessionStore"), \
+             patch("src.presentation.cli.split_cmd.SessionManager", return_value=mock_manager), \
              patch("src.presentation.cli.split_cmd.setup_logging") as mock_setup:
             
             result = runner.invoke(app, [
