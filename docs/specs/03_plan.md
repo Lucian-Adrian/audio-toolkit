@@ -456,3 +456,31 @@ ls ./data/output/pipeline-test  # Should have MP3 segments
 - `--resume` continues failed pipeline
 
 ---
+
+## Phase 8: Polish & Release ✅ COMPLETE
+
+**Goal:** Finalize documentation and prepare for v1.0.0 release.
+
+### Completed Tasks
+
+#### 8.1 Documentation Updates ✅
+- [x] Updated `readme.md` with comprehensive features, installation, usage examples
+- [x] Updated `docs/file-structure.md` with current project structure
+- [x] Created `docs/plugins/creating-plugins.md` plugin development guide
+- [x] Updated `contributing.md` with development setup and guidelines
+- [x] Updated `changelog.md` with v1.0.0 release notes
+
+#### 8.2 Testing & Quality ✅
+- [x] Added CLI tests for session_cmd (46 tests)
+- [x] Added CLI tests for pipeline_cmd (48 tests)
+- [x] Achieved 73% code coverage (up from 64%)
+- [x] 461 total tests passing
+
+#### 8.3 Release Preparation ✅
+- [x] Updated pyproject.toml to v1.0.0
+- [x] Added all dependencies (PyYAML, InquirerPy)
+- [x] Configured entry points for CLI and plugins
+- [x] Verified editable install works
+- [x] Verified CLI runs correctly
+
+---
