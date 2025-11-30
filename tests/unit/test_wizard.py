@@ -306,35 +306,32 @@ class TestConvertWizard:
 class TestCLIIntegration:
     """Tests for CLI integration with wizard."""
     
-    @patch("src.presentation.wizard.main_menu.is_interactive_terminal")
-    @patch("src.presentation.wizard.main_menu.launch")
-    def test_wizard_launch_on_no_args(self, mock_launch, mock_is_interactive):
+    def test_wizard_launch_on_no_args(self):
         """Test that wizard launches when no args provided."""
         from typer.testing import CliRunner
         from src.presentation.cli import app
         
-        mock_is_interactive.return_value = True
         runner = CliRunner()
         
-        # The wizard would launch, but we've mocked it
-        result = runner.invoke(app, [])
-        
-        # Should call launch when interactive
-        mock_launch.assert_called_once()
+        # Patch at the module where it's used, not where it's defined
+        with patch("src.presentation.cli.is_interactive_terminal", return_value=True):
+            with patch("src.presentation.cli.launch") as mock_launch:
+                result = runner.invoke(app, [])
+                # Should call launch when interactive
+                mock_launch.assert_called_once()
     
-    @patch("src.presentation.wizard.main_menu.is_interactive_terminal")
-    def test_non_interactive_shows_error(self, mock_is_interactive):
+    def test_non_interactive_shows_error(self):
         """Test that non-interactive terminal shows error."""
         from typer.testing import CliRunner
         from src.presentation.cli import app
         
-        mock_is_interactive.return_value = False
         runner = CliRunner()
         
-        result = runner.invoke(app, [])
-        
-        assert result.exit_code == 1
-        assert "interactive terminal" in result.output.lower()
+        with patch("src.presentation.cli.is_interactive_terminal", return_value=False):
+            result = runner.invoke(app, [])
+            
+            assert result.exit_code == 1
+            assert "interactive terminal" in result.output.lower()
     
     @patch("src.presentation.wizard.main_menu.execute_from_preset")
     def test_preset_execution(self, mock_execute):
@@ -348,8 +345,6 @@ class TestCLIIntegration:
         result = runner.invoke(app, ["--preset", "my-preset"])
         
         mock_execute.assert_called_once_with("my-preset")
-
-
 class TestPresetExecution:
     """Tests for preset execution."""
     
