@@ -39,8 +39,6 @@ class PresetConfig(BaseModel):
         for char in unsafe_chars:
             v = v.replace(char, "_")
         return v.strip()
-        """Pydantic configuration."""
-        extra = "allow"
 
 
 class PresetManager:
