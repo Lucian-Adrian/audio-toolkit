@@ -2,6 +2,7 @@
 
 import pytest
 from pathlib import Path
+from unittest.mock import patch
 from typer.testing import CliRunner
 
 from src.presentation.cli import app
@@ -14,8 +15,8 @@ class TestVersionCommand:
     """Tests for version command."""
     
     def test_version_shows_output(self):
-        """Test version command shows version."""
-        result = runner.invoke(app, ["version"])
+        """Test --version flag shows version."""
+        result = runner.invoke(app, ["--version"])
         
         assert result.exit_code == 0
         assert "Audio Toolkit" in result.output
@@ -121,9 +122,27 @@ class TestConvertCommand:
 class TestCLINoArgs:
     """Tests for CLI with no arguments."""
     
-    def test_no_args_shows_help(self):
-        """Test running CLI with no args shows help."""
+    def test_no_args_in_non_interactive_shows_message(self):
+        """Test running CLI with no args in non-interactive mode shows message."""
+        # In non-interactive mode (test runner), should show wizard error message
         result = runner.invoke(app, [])
         
-        # Should show help (no_args_is_help=True)
+        # Should show interactive terminal error
+        assert "interactive terminal" in result.output.lower()
+        assert result.exit_code == 1
+    
+    def test_no_args_with_help_shows_usage(self):
+        """Test running CLI with --help shows usage."""
+        result = runner.invoke(app, ["--help"])
+        
+        # Should show help
         assert "Usage" in result.output or "Commands" in result.output
+        assert result.exit_code == 0
+    
+    def test_wizard_flag_in_non_interactive(self):
+        """Test --wizard flag in non-interactive mode shows message."""
+        result = runner.invoke(app, ["--wizard"])
+        
+        # Should show interactive terminal error
+        assert "interactive terminal" in result.output.lower()
+        assert result.exit_code == 1
