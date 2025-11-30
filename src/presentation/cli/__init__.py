@@ -11,6 +11,8 @@ from .convert_cmd import app as convert_app
 from .session_cmd import app as session_app
 from .pipeline_cmd import app as pipeline_app
 from .plugin_cmd import app as plugin_app
+from .analyze_cmd import app as analyze_app
+from .voice_cmd import app as voice_app
 from ..wizard import launch, is_interactive_terminal
 
 console = Console()
@@ -29,6 +31,8 @@ app.add_typer(convert_app, name="convert", help="Convert audio formats")
 app.add_typer(session_app, name="sessions", help="Manage processing sessions")
 app.add_typer(pipeline_app, name="pipeline", help="Execute processing pipelines")
 app.add_typer(plugin_app, name="plugins", help="Manage audio processors and plugins")
+app.add_typer(analyze_app, name="analyze", help="Analyze audio (visualize, stats, transcribe)")
+app.add_typer(voice_app, name="voice", help="Voice enhancement (denoise, dynamics, trim)")
 
 
 @app.callback(invoke_without_command=True)
