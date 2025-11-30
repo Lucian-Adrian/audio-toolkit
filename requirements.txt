@@ -4,5 +4,9 @@ typer>=0.9.0
 rich>=13.7.0
 pydantic>=2.5.0
 
+# Interactive TUI
+InquirerPy>=0.3.4
+pyyaml>=6.0
+
 # Python 3.13 compatibility
 audioop-lts>=0.2.1; python_version>='3.13'
