@@ -1,107 +1,190 @@
-# GitHub Copilot Instructions for Audio Toolkit
-
-## Project Overview
-The Audio Toolkit is a Python application for processing audio files. It provides command-line tools for converting audio formats, splitting audio files, and batch processing operations.
-
 ## Architecture
-- **Modular Design**: Core types/exceptions, utilities, processors, and presentation layers
-- **CLI Interface**: Click-based command-line interface
-- **Audio Processing**: Uses pydub for audio manipulation
-- **Configuration**: JSON-based configuration management
-- **Testing**: pytest with unit and integration tests
 
-## Key Components
 
-### Core Module
-- `types.py`: Data classes for AudioFile, ProcessingConfig, etc.
-- `exceptions.py`: Custom exception hierarchy
-- `interfaces.py`: Abstract base classes for processors
+### Spec-Driven Development
+Specs live **next to the code**, not in a wiki. They act as **Context Anchors** for AI agents.
 
-### Utils Module
-- `logger.py`: Logging setup
-- `file_ops.py`: File system operations
-- `audio.py`: Audio file utilities
-- `config.py`: Configuration management
-- `progress.py`: Progress reporting
-- `validators.py`: Input validation
 
-### Processors Module
-- `converter.py`: Audio format conversion
-- `splitter/`: Audio splitting (fixed duration, etc.)
-- Registry pattern for processor discovery
+**Workflow:**
+1. **Context First** → Read `specs/00_context.md` to understand goals
+2. **Requirements** → Check `specs/01_requirements.md` (EARS notation) before implementing
+3. **Design** → Reference `specs/02_design.md` for architecture decisions
+4. **Plan** → Follow `specs/03_plan.md` checklist for atomic tasks
 
-### CLI Module
-- `convert` command: Format conversion with options
-- `split` command: Audio splitting with configuration
+
+**Before writing code, always:**
+- Verify the task exists in `specs/03_plan.md`
+- Check `specs/02_design.md` for interface contracts
+- Update specs if requirements change
+
+
+### Directory Structure
+```
+specs/                      # The "Brain" of the project
+├── 00_context.md           # High-level goals & "vibe"
+├── 01_requirements.md      # EARS notation requirements
+├── 02_design.md            # Architecture, Schemas, & Interfaces
+└── 03_plan
+
+
+
+
+### Design Pattern
+
+
+
+
+## Code Conventions
+
+
+### Code Quality Criteria
+- **KISS**: Keep it simple, stupid
+- **DRY**: Don't repeat yourself
+- **YAGNI**: You aren't gonna need it
+- **SOLID**: Single responsibility, Open-closed, Liskov substitution, Interface segregation, Dependency inversion
+- **Max 100 lines per file** - split large files into smaller modules, exceptions for frontend files
+- **Separation of concerns**: Each module handles one concern
+- **Modular design**: Reusable, testable, scalable components
+
+
+### File Organization
+- Separate each major component/concern per file
+- Large code → split into smaller components, import in main file
+- Document structure changes in `docs/file-structure.md`
+
+
+### Code Standards
+- Clean, readable code with clear reasoning
+- Proper error handling and logging
+- Security best practices
+- Performance considerations
+- Handle edge cases
+- Future-proof: changes don't require huge refactoring
+- Consistent coding style throughout
+
+
+Criteria to write code:
+- Follow best practices for documentation and code organization
+- Ensure clarity and maintainability in both code and documentation
+- Adhere to the project's architectural guidelines and contribution workflow
+- KISS
+- DRY
+- Try to keep max 100 lines of code per file
+- For large frontend code, split into smaller components and make the page a file that imports those components
+- Separate each page per file, or if SPA, separate each major component per file or each major concern per folder, then each page or view per file that imports those components,
+- Documenting the structure in docs/file_structure.md
+- Use global styles and define them according to EVO Design System tokens
+- YAGNI
+- Separation of concerns
+- Single responsibility principle
+- Modular design
+- Reusability
+- Testability
+- Scalability
+- Maintainability
+- Extensibility
+- Performance considerations
+- Security best practices
+- Consistency in coding style and conventions
+- Proper error handling
+- Logging and monitoring
+- Version control practices
+- Design patterns
+- SOLID principles
+- Code smells
+- Edge cases
+- Real-world applicability
+- Make it as easy as possible to understand the system and then apply changes to it
+- Make it change proof, future proof, robust, adding changes does not require huge refactoring
+- clean, readable code
+- make it clearly articulated, using simple words and logically, so that it shows reasoning and thought put into it
+
+
+
+
+# Example of abstract thinking process and reasoning logic
+1. Core Architectural Principles
+- think about this problem using TRIZ, teorya reshenya izobretatelnych zadach.
+- find the core principles that can be applied to this problem
+- find core issues and core solutions that can be applied generally
+- Use Elon Musk 5 principles for a inventor company.
+- First Principles Thinking
+- Think outside the box
+- Systems Thinking
+- Modular Design
+- Scalability
+- Multi-Tenant & Multi-Location: Single Database instance. Data isolation
+- think logically, shift problem logic as much to left (db) from back and front as possible
+- zero trust principle
+- DRY
+- KISS
+- SOLID
+- Optimization
+- Genericness (we do not want to tie our hands, we want to easily add mr business requests later on)
+- Logic (shift as much as possible logic from front and back in DB)
+
+
 
 ## Development Guidelines
 
-### Code Style
-- Follow PEP 8 conventions
-- Use type hints for all function parameters and return values
-- Write docstrings for all public functions and classes
-- Use descriptive variable names
+### Documentation First
+- Document new features in the appropriate `docs/` subdirectory before implementation
+- Update `changelog.md` with notable changes using semantic versioning
+- Keep `docs/file_structure.md` current as the codebase evolves
 
-### Error Handling
-- Use custom exceptions from `core.exceptions`
-- Provide meaningful error messages
-- Log errors appropriately
-- Handle edge cases gracefully
+### Code Organization
+- Backend code → document in `docs/backend/`
+- Frontend code → document in `docs/frontend/`
+- Database changes → document in `docs/db/`
+- Track milestones in `docs/progress/`
 
-### Testing
-- Write unit tests for all new functionality
-- Include integration tests for workflows
-- Use fixtures for test data
-- Aim for high test coverage
+### Contribution Workflow
+- Follow patterns documented in `contributing.md`
+- Use descriptive commit messages referencing the affected component (e.g., `[backend] Add user authentication`)
 
-### Documentation
-- Update specifications in `docs/specs/` for new features
-- Maintain file structure documentation
-- Keep README and descriptions current
+## Notes for AI Agents
 
-## Common Patterns
+- This is a greenfield project - prioritize clean, maintainable patterns from the start
+- When creating new components, update `docs/file_structure.md` accordingly
+- Prefer Romanian language for user-facing content where appropriate (Moldova context)
 
-### Creating a New Processor
-1. Implement the appropriate interface (`AudioProcessor` or `AudioSplitter`)
-2. Register in the processor registry
-3. Add configuration types if needed
-4. Write comprehensive tests
-5. Update CLI commands
+Criteria to write code:
+- Follow best practices for documentation and code organization
+- Ensure clarity and maintainability in both code and documentation
+- Adhere to the project's architectural guidelines and contribution workflow
+- KISS
+- DRY
+- Design patterns
+- SOLID principles
+- Code smells
+- Edge cases
+- Real-world applicability
+- Make it as easy as possible to understand the system and then apply changes to it
+- Make it change proof, future proof, robust, adding changes does not require huge refactoring
+- clean, readable code
+- make it clearly articulated, using simple words and logically, so that it shows reasoning and thought put into it
 
-### Adding CLI Commands
-1. Create command function in appropriate CLI module
-2. Add to main CLI group
-3. Handle argument validation
-4. Provide progress reporting
-5. Include error handling
 
-### Configuration Management
-1. Add new settings to `ConfigManager`
-2. Update default configuration
-3. Provide CLI options for overrides
-4. Document configuration options
 
-## File Organization
-- Keep related functionality together
-- Use clear module boundaries
-- Import from parent packages with relative imports
-- Maintain consistent directory structure
+# Example of abstract thinking process and reasoning logic
+1. Core Architectural Principles
+- think about this problem using TRIZ, teorya reshenya izobretatelnych zadach.
+- find the core principles that can be applied to this problem
+- find core issues and core solutions that can be applied generally
+- Use Elon Musk 5 principles for a inventor company.
+- First Principles Thinking
+- Think outside the box
+- Systems Thinking
+- Modular Design
+- Scalability
+- Multi-Tenant & Multi-Location: Single Database instance. Data isolation
+- think logically, shift problem logic as much to left (db) from back and front as possible
+- zero trust principle
+- DRY
+- KISS
+- SOLID
+- Optimization
+- Genericness (we do not want to tie our hands, we want to easily add mr business requests later on)
+- Logic (shift as much as possible logic from front and back in DB)
 
-## Audio Processing Notes
-- Always validate input files before processing
-- Use temporary files for intermediate results
-- Preserve metadata when possible
-- Handle different audio formats appropriately
-- Consider memory usage for large files
-
-## Git Workflow
-- Make granular commits for logical changes
-- Use descriptive commit messages
-- Keep branches focused on single features
-- Write clear pull request descriptions
-
-## Quality Assurance
-- Run tests before committing
-- Check code with linters
-- Validate audio processing results
-- Test edge cases and error conditions
+2. Abstract Business Logic
