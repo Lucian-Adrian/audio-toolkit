@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ...core.exceptions import ConfigError
 from ...utils.logger import get_logger
@@ -20,6 +20,8 @@ logger = get_logger(__name__)
 
 class PresetConfig(BaseModel):
     """Schema for a saved preset configuration."""
+    
+    model_config = ConfigDict(extra="allow")
     
     name: str = Field(..., min_length=1, max_length=100)
     operation: str = Field(..., description="Operation type: split, convert, etc.")
@@ -37,8 +39,6 @@ class PresetConfig(BaseModel):
         for char in unsafe_chars:
             v = v.replace(char, "_")
         return v.strip()
-    
-    class Config:
         """Pydantic configuration."""
         extra = "allow"
 
